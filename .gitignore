@@ -27,3 +27,4 @@ sheet1_full.txt
 # Logs
 *.log
 npm-debug.log*
+.vercel

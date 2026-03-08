@@ -49,19 +49,44 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        let isMounted = true
+        let settled = false
+
+        // Timeout: if getSession hangs for >8s (auth lock deadlock), force clear and proceed
+        const timeout = setTimeout(() => {
+            if (!settled && isMounted) {
+                settled = true
+                console.warn('[Auth] Session check timed out — clearing stale session')
+                localStorage.removeItem('medlogix-auth')
+                setUser(null)
+                setProfile(null)
+                setLoading(false)
+            }
+        }, 8000)
+
         // Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
+            if (settled || !isMounted) return
+            settled = true
+            clearTimeout(timeout)
             setUser(session?.user ?? null)
             if (session?.user) {
                 fetchProfile(session.user.id)
             } else {
                 setLoading(false)
             }
+        }).catch((err) => {
+            if (settled || !isMounted) return
+            settled = true
+            clearTimeout(timeout)
+            console.error('[Auth] getSession error:', err)
+            setLoading(false)
         })
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (_event, session) => {
+                if (!isMounted) return
                 setUser(session?.user ?? null)
                 if (session?.user) {
                     await fetchProfile(session.user.id)
@@ -72,7 +97,11 @@ export function AuthProvider({ children }) {
             }
         )
 
-        return () => subscription.unsubscribe()
+        return () => {
+            isMounted = false
+            clearTimeout(timeout)
+            subscription.unsubscribe()
+        }
     }, [])
 
     async function fetchProfile(userId) {

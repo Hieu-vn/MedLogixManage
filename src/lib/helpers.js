@@ -37,15 +37,20 @@ export function formatDateTime(dateStr) {
 }
 
 /**
- * Generate auto-increment code
- * @param {string} prefix - e.g., 'DT-SALES'
- * @param {number} sequence - current count
- * @returns {string} e.g., 'DT-SALES-2026-0001'
+ * Generate unique code using timestamp
+ * @param {string} prefix - e.g., 'SF', 'PF', 'PO'
+ * @returns {string} e.g., 'SF-2026-0308-143022'
  */
-export function generateCode(prefix, sequence = 1) {
-    const year = new Date().getFullYear()
-    const seq = String(sequence).padStart(4, '0')
-    return `${prefix}-${year}-${seq}`
+export function generateCode(prefix) {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const h = String(now.getHours()).padStart(2, '0')
+    const m = String(now.getMinutes()).padStart(2, '0')
+    const s = String(now.getSeconds()).padStart(2, '0')
+    const rand = String(Math.floor(Math.random() * 100)).padStart(2, '0')
+    return `${prefix}-${year}${month}${day}-${h}${m}${s}${rand}`
 }
 
 /**
