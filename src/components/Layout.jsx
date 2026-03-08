@@ -1,10 +1,10 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth, ROLE_LABELS, ROLE_COLORS } from '../lib/auth'
 import {
     LayoutDashboard, FileText, ClipboardList, ShoppingCart,
-    Ship, Warehouse, Truck, Database, Settings, LogOut,
-    Sun, Moon, ChevronRight, Menu, Shield
+    Ship, Warehouse, Truck, Database, LogOut,
+    Sun, Moon, ChevronRight, ChevronLeft, Shield, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -35,7 +35,6 @@ const NAV_ITEMS = [
     },
 ]
 
-// Page title mapping
 const PAGE_TITLES = {
     '/dashboard': 'Dashboard',
     '/sales-forecast': 'Dự trù từ Sales',
@@ -53,11 +52,16 @@ export default function Layout({ children }) {
     const { profile, signOut, hasAccess } = useAuth()
     const location = useLocation()
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+    const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true')
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme)
         localStorage.setItem('theme', theme)
     }, [theme])
+
+    useEffect(() => {
+        localStorage.setItem('sidebar-collapsed', collapsed)
+    }, [collapsed])
 
     const toggleTheme = () => {
         setTheme(prev => prev === 'dark' ? 'light' : 'dark')
@@ -67,15 +71,24 @@ export default function Layout({ children }) {
     const initials = profile?.full_name?.split(' ').map(n => n[0]).join('').slice(-2).toUpperCase() || '?'
 
     return (
-        <div className="app-layout">
+        <div className={`app-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
             {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-header">
                     <div className="sidebar-logo">M</div>
-                    <div className="sidebar-brand">
-                        <span className="sidebar-brand-name">MedLogix</span>
-                        <span className="sidebar-brand-sub">Manage</span>
-                    </div>
+                    {!collapsed && (
+                        <div className="sidebar-brand">
+                            <span className="sidebar-brand-name">MedLogix</span>
+                            <span className="sidebar-brand-sub">Manage</span>
+                        </div>
+                    )}
+                    <button
+                        className="sidebar-collapse-btn"
+                        onClick={() => setCollapsed(prev => !prev)}
+                        title={collapsed ? 'Mở rộng' : 'Thu gọn'}
+                    >
+                        {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                    </button>
                 </div>
 
                 <nav className="sidebar-nav">
@@ -84,15 +97,16 @@ export default function Layout({ children }) {
                         if (visibleItems.length === 0) return null
                         return (
                             <div key={section.section} className="sidebar-section">
-                                <div className="sidebar-section-title">{section.section}</div>
+                                {!collapsed && <div className="sidebar-section-title">{section.section}</div>}
                                 {visibleItems.map(item => (
                                     <NavLink
                                         key={item.path}
                                         to={item.path}
                                         className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                                        title={collapsed ? item.label : undefined}
                                     >
-                                        <item.icon />
-                                        <span>{item.label}</span>
+                                        <item.icon size={18} />
+                                        {!collapsed && <span>{item.label}</span>}
                                     </NavLink>
                                 ))}
                             </div>
@@ -110,11 +124,13 @@ export default function Layout({ children }) {
                         >
                             {initials}
                         </div>
-                        <div className="sidebar-user-info" style={{ cursor: 'pointer' }}
-                            onClick={() => window.location.href = '/profile'}>
-                            <div className="sidebar-user-name">{profile?.full_name || 'User'}</div>
-                            <div className="sidebar-user-role">{ROLE_LABELS[profile?.role] || profile?.role}</div>
-                        </div>
+                        {!collapsed && (
+                            <div className="sidebar-user-info" style={{ cursor: 'pointer' }}
+                                onClick={() => window.location.href = '/profile'}>
+                                <div className="sidebar-user-name">{profile?.full_name || 'User'}</div>
+                                <div className="sidebar-user-role">{ROLE_LABELS[profile?.role] || profile?.role}</div>
+                            </div>
+                        )}
                         <LogOut size={16} style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
                             onClick={signOut} title="Đăng xuất" />
                     </div>
@@ -140,8 +156,8 @@ export default function Layout({ children }) {
                     </div>
                 </header>
 
-                {/* Content Area */}
-                <main className="content-area">
+                {/* Content Area with page entry animation */}
+                <main className="content-area" key={location.pathname}>
                     {children}
                 </main>
             </div>

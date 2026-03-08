@@ -11,7 +11,7 @@ import { generateCode, formatDate } from '../lib/helpers'
 import {
     Plus, Eye, Edit2, Trash2, Send, FileText,
     Search, X, CheckCircle, XCircle, Package,
-    ChevronDown
+    ChevronDown, Clock
 } from 'lucide-react'
 
 export default function SalesForecastPage() {
@@ -231,6 +231,32 @@ export default function SalesForecastPage() {
                 )}
             />
 
+            {/* Stat Cards */}
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gap: 'var(--space-3)', marginBottom: 'var(--space-5)',
+            }}>
+                {[
+                    { label: 'Tổng phiếu', value: forecasts.length, color: '#6C5CE7', icon: <FileText size={18} /> },
+                    { label: 'Nháp', value: forecasts.filter(f => f.status === 'draft').length, color: '#718096', icon: <Edit2 size={18} /> },
+                    { label: 'Chờ duyệt', value: forecasts.filter(f => f.status === 'pending').length, color: '#FDCB6E', icon: <Clock size={18} /> },
+                    { label: 'Đã duyệt', value: forecasts.filter(f => f.status === 'approved').length, color: '#00B894', icon: <CheckCircle size={18} /> },
+                    { label: 'Từ chối', value: forecasts.filter(f => f.status === 'rejected').length, color: '#E17055', icon: <XCircle size={18} /> },
+                ].map(s => (
+                    <div key={s.label} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            background: `color-mix(in srgb, ${s.color} 12%, transparent)`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0,
+                        }}>{s.icon}</div>
+                        <div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500 }}>{s.label}</div>
+                            <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.2 }}>{s.value}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             {/* Status Filter Chips */}
             <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
                 {[
@@ -249,6 +275,7 @@ export default function SalesForecastPage() {
                     </button>
                 ))}
             </div>
+
 
             <DataTable
                 columns={columns}

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 
 /**
- * StatCard — Animated KPI card with count-up effect
- * Props: icon, value, label, trend, trendLabel, color, onClick
+ * StatCard — Animated KPI card with count-up effect + wireframe gradient icon
+ * Props: icon, value, label, trend, trendLabel, color, onClick, suffix, badge
  */
-export default function StatCard({ icon, value, label, trend, trendLabel, color = 'var(--primary-500)', onClick, suffix = '' }) {
+export default function StatCard({ icon, value, label, trend, trendLabel, color = 'var(--primary-500)', onClick, suffix = '', badge }) {
     const [displayed, setDisplayed] = useState(0)
     const ref = useRef(null)
 
@@ -34,9 +34,9 @@ export default function StatCard({ icon, value, label, trend, trendLabel, color 
         <div
             className="card kpi-card"
             onClick={onClick}
-            style={{ cursor: onClick ? 'pointer' : 'default' }}
+            style={{ cursor: onClick ? 'pointer' : 'default', '--kpi-color': color }}
         >
-            <div className="kpi-icon" style={{ background: `${color}15`, color }}>
+            <div className="kpi-icon" style={{ background: `${color}20`, color }}>
                 {icon}
             </div>
             <div className="kpi-content">
@@ -45,6 +45,11 @@ export default function StatCard({ icon, value, label, trend, trendLabel, color 
                     {typeof value === 'string' && value.includes('₫')
                         ? value
                         : displayed.toLocaleString('vi-VN')}{suffix}
+                    {badge && (
+                        <span className={`kpi-badge ${badge.type || 'warning'}`}>
+                            {badge.text}
+                        </span>
+                    )}
                 </div>
                 {(trend !== undefined || trendLabel) && (
                     <div className="kpi-change" style={{ color: trendColor }}>

@@ -6,10 +6,12 @@ import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
 import PageHeader from '../components/PageHeader'
+import StatCard from '../components/StatCard'
 import {
     Plus, Eye, Edit2, Send, Trash2, Check, X,
     ShoppingCart, AlertTriangle, TrendingUp, TrendingDown,
-    Package, DollarSign, FileText, CheckCircle
+    Package, DollarSign, FileText, CheckCircle, Clock,
+    Filter, Calendar
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
 import POTimeline, { getOverdueBadge } from '../components/POTimeline'
@@ -43,6 +45,9 @@ export default function PurchaseOrderPage() {
     const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState('all')
     const [search, setSearch] = useState('')
+    const [supplierFilter, setSupplierFilter] = useState('')
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
     const [showCreate, setShowCreate] = useState(false)
     const [showView, setShowView] = useState(null)
     const [showEdit, setShowEdit] = useState(null)
@@ -88,8 +93,11 @@ export default function PurchaseOrderPage() {
                 o.supplier?.name?.toLowerCase().includes(s)
             )
         }
+        if (supplierFilter) list = list.filter(o => o.supplier_id === supplierFilter)
+        if (dateFrom) list = list.filter(o => o.created_at >= dateFrom)
+        if (dateTo) list = list.filter(o => o.created_at <= dateTo + 'T23:59:59')
         return list
-    }, [orders, statusFilter, search])
+    }, [orders, statusFilter, search, supplierFilter, dateFrom, dateTo])
 
     // Status counts
     const statusCounts = useMemo(() => {
@@ -97,6 +105,24 @@ export default function PurchaseOrderPage() {
         orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
         return counts
     }, [orders])
+
+    // PO stats for stat cards (wireframe P1)
+    const poStats = useMemo(() => {
+        const overdueCount = orders.filter(o => {
+            if (['received', 'cancelled'].includes(o.status)) return false
+            if (!o.expected_delivery) return false
+            return new Date(o.expected_delivery) < new Date()
+        }).length
+        const sentCount = (statusCounts.sent || 0) + (statusCounts.confirmed || 0) + (statusCounts.delivering || 0)
+        const totalValue = orders.reduce((s, o) => s + (o.grand_total || 0), 0)
+        return {
+            total: orders.length,
+            pending: statusCounts.pending || 0,
+            sent: sentCount,
+            overdue: overdueCount,
+            totalValue,
+        }
+    }, [orders, statusCounts])
 
     // Generate next PO code
     async function getNextCode() {
@@ -644,6 +670,15 @@ export default function PurchaseOrderPage() {
             ),
         },
         {
+            key: 'priority', label: 'Ưu tiên',
+            render: (_, row) => {
+                const p = row.priority || 'medium'
+                const cfg = { high: { label: 'High', bg: '#D6303120', color: '#D63031' }, medium: { label: 'Medium', bg: '#FDCB6E20', color: '#FDCB6E' }, low: { label: 'Low', bg: '#00B89420', color: '#00B894' } }
+                const c = cfg[p] || cfg.medium
+                return <span className="status-badge" style={{ background: c.bg, color: c.color, fontSize: 'var(--font-xs)' }}>{c.label}</span>
+            },
+        },
+        {
             key: 'items_count', label: 'Số SP',
             render: (_, row) => <span className="count-badge">{row.po_items?.length || 0}</span>,
         },
@@ -701,7 +736,7 @@ export default function PurchaseOrderPage() {
     return (
         <div>
             <PageHeader
-                title="Đặt hàng (Purchase Order)"
+                title="Quản lý Đặt hàng"
                 subtitle="Tạo và quản lý đơn đặt hàng cho nhà cung cấp"
                 icon={<ShoppingCart size={20} />}
                 actions={isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
@@ -711,8 +746,29 @@ export default function PurchaseOrderPage() {
                 )}
             />
 
-            {/* Status filter chips */}
-            <div className="filter-chips" style={{ marginBottom: 'var(--space-4)' }}>
+            {/* PO Stat Cards — wireframe P1 */}
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 'var(--space-4)', marginBottom: 'var(--space-4)',
+            }}>
+                <StatCard icon={<ShoppingCart size={24} />} label="Tổng PO" value={poStats.total} color="#6C5CE7" />
+                <StatCard icon={<Clock size={24} />} label="Chờ phê duyệt" value={poStats.pending} color="#FDCB6E" />
+                <StatCard icon={<Send size={24} />} label="Đã gửi NCC" value={poStats.sent} color="#0984E3" />
+                <StatCard icon={<AlertTriangle size={24} />} label="Quá hạn"
+                    value={poStats.overdue}
+                    color={poStats.overdue > 0 ? '#D63031' : '#00B894'}
+                    badge={poStats.overdue > 0 ? { text: 'Cần xử lý', type: 'danger' } : null}
+                />
+            </div>
+
+            {/* Filter bar — wireframe P2: Search + Status + NCC + Date Range */}
+            <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)',
+                marginBottom: 'var(--space-4)', alignItems: 'center',
+            }}>
+                <input className="form-input" placeholder="🔍 Tìm mã PO, NCC..."
+                    value={search} onChange={e => setSearch(e.target.value)}
+                    style={{ maxWidth: 240, fontSize: 'var(--font-sm)' }} />
                 {STATUS_FILTERS.map(f => (
                     <button key={f.key}
                         className={`chip ${statusFilter === f.key ? 'active' : ''}`}
@@ -720,13 +776,30 @@ export default function PurchaseOrderPage() {
                         {f.label} ({statusCounts[f.key] || 0})
                     </button>
                 ))}
-            </div>
-
-            {/* Search */}
-            <div style={{ marginBottom: 'var(--space-4)', maxWidth: 400 }}>
-                <input className="form-input" placeholder="Tìm mã PO, NCC..."
-                    value={search} onChange={e => setSearch(e.target.value)}
-                    style={{ paddingLeft: 'var(--space-8)' }} />
+                {/* NCC dropdown — wireframe P2 */}
+                <select className="form-select"
+                    value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)}
+                    style={{ maxWidth: 180, fontSize: 'var(--font-sm)', padding: '6px 30px 6px 10px' }}>
+                    <option value="">Tất cả NCC</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {/* Date Range — wireframe P2 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Calendar size={14} style={{ color: 'var(--text-tertiary)' }} />
+                    <input type="date" className="form-input"
+                        value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                        style={{ width: 130, fontSize: 'var(--font-xs)', padding: '5px 8px' }} />
+                    <span style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-xs)' }}>→</span>
+                    <input type="date" className="form-input"
+                        value={dateTo} onChange={e => setDateTo(e.target.value)}
+                        style={{ width: 130, fontSize: 'var(--font-xs)', padding: '5px 8px' }} />
+                </div>
+                {(supplierFilter || dateFrom || dateTo) && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setSupplierFilter(''); setDateFrom(''); setDateTo('') }}
+                        style={{ fontSize: 'var(--font-xs)' }}>
+                        <X size={12} /> Xóa lọc
+                    </button>
+                )}
             </div>
 
             {/* Table */}

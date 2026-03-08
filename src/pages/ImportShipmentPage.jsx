@@ -662,10 +662,12 @@ export default function ImportShipmentPage() {
                                         <td style={{ fontWeight: 600 }}>{formatCurrency(s.total_cost)}</td>
                                         <td><StatusTimeline currentStatus={s.status} /></td>
                                         <td>
-                                            <span style={{
+                                            <span className="badge" style={{
+                                                background: checkedDocs === totalDocs ? 'rgba(0,184,148,0.15)' : 'rgba(253,203,110,0.15)',
                                                 color: checkedDocs === totalDocs ? '#00B894' : '#FDCB6E',
-                                                fontWeight: 600,
-                                            }}>{checkedDocs}/{totalDocs}</span>
+                                                fontWeight: 600, fontSize: 'var(--font-xs)',
+                                                padding: '3px 10px', borderRadius: '999px',
+                                            }}>📄 {checkedDocs}/{totalDocs}</span>
                                         </td>
                                         <td>
                                             <button className="btn btn-ghost btn-sm" onClick={() => setShowView(s)}>

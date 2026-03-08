@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { StorageBadge } from '../components/Badges'
-import { Plus, Edit2, Trash2, Package, Building2, Truck, Factory, DollarSign, History, X, ChevronRight, Database } from 'lucide-react'
+import { Plus, Edit2, Trash2, Package, Building2, Truck, Factory, DollarSign, History, X, ChevronRight, Database, Filter } from 'lucide-react'
 
 const TABS = [
     { key: 'products', label: 'Sản phẩm', icon: Package },
@@ -26,6 +26,7 @@ export default function MasterDataPage() {
     const [suppliers, setSuppliers] = useState([])
     const [historyPanel, setHistoryPanel] = useState(null) // { product_id, supplier_id, product_name }
     const [historyData, setHistoryData] = useState([])
+    const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'active' | 'inactive'
     const toast = useToast()
 
     useEffect(() => {
@@ -152,6 +153,18 @@ export default function MasterDataPage() {
         setHistoryData(hist || [])
     }
 
+    // Inline toggle active status (wireframe M2)
+    async function handleToggleActive(item) {
+        try {
+            const table = activeTab
+            const { error } = await supabase.from(table).update({ is_active: !item.is_active }).eq('id', item.id)
+            if (error) throw error
+            setData(prev => prev.map(d => d.id === item.id ? { ...d, is_active: !d.is_active } : d))
+        } catch (err) {
+            toast.error('Lỗi cập nhật trạng thái: ' + err.message)
+        }
+    }
+
     const tabConfig = TAB_CONFIGS[activeTab]
 
     return (
@@ -196,15 +209,27 @@ export default function MasterDataPage() {
             <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <DataTable
-                        columns={tabConfig.columns(handleEdit, handleDelete, showHistory)}
-                        data={data}
+                        columns={tabConfig.columns(handleEdit, handleDelete, activeTab === 'price_list' ? showHistory : handleToggleActive)}
+                        data={activeFilter === 'all' ? data : data.filter(d => activeFilter === 'active' ? d.is_active : !d.is_active)}
                         loading={loading}
                         searchPlaceholder={tabConfig.searchPlaceholder}
                         emptyMessage={tabConfig.emptyMessage}
                         actions={
-                            <button className="btn btn-primary" onClick={handleAdd}>
-                                <Plus size={16} /> Thêm {tabConfig.label}
-                            </button>
+                            <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                {activeTab !== 'price_list' && (
+                                    <select className="form-select"
+                                        value={activeFilter}
+                                        onChange={e => setActiveFilter(e.target.value)}
+                                        style={{ width: 'auto', fontSize: 'var(--font-xs)', padding: '4px 28px 4px 8px', minWidth: 120 }}>
+                                        <option value="all">Tất cả trạng thái</option>
+                                        <option value="active">✅ Đang hoạt động</option>
+                                        <option value="inactive">⛔ Ngừng hoạt động</option>
+                                    </select>
+                                )}
+                                <button className="btn btn-primary" onClick={handleAdd}>
+                                    <Plus size={16} /> Thêm {tabConfig.label}
+                                </button>
+                            </div>
                         }
                     />
                 </div>
@@ -279,30 +304,38 @@ export default function MasterDataPage() {
                 )}
             </div>
 
-            {/* Add/Edit Modal */}
-            <Modal
-                isOpen={modalOpen}
-                onClose={() => setModalOpen(false)}
-                title={editingItem ? `Sửa ${tabConfig.label}` : `Thêm ${tabConfig.label} mới`}
-                size="lg"
-            >
-                {activeTab === 'price_list' ? (
-                    <PriceListForm
-                        item={editingItem}
-                        products={products}
-                        suppliers={suppliers}
-                        onSave={handleSave}
-                        onCancel={() => setModalOpen(false)}
-                    />
-                ) : (
-                    <FormComponent
-                        type={activeTab}
-                        item={editingItem}
-                        onSave={handleSave}
-                        onCancel={() => setModalOpen(false)}
-                    />
-                )}
-            </Modal>
+            {/* Add/Edit Side Panel (wireframe M1) */}
+            {modalOpen && (
+                <>
+                    <div className="side-panel-overlay" onClick={() => setModalOpen(false)} />
+                    <div className="side-panel">
+                        <div className="side-panel-header">
+                            <h3>{editingItem ? `Sửa ${tabConfig.label}` : `Thêm ${tabConfig.label} mới`}</h3>
+                            <button className="btn btn-icon btn-ghost btn-sm" onClick={() => setModalOpen(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="side-panel-body">
+                            {activeTab === 'price_list' ? (
+                                <PriceListForm
+                                    item={editingItem}
+                                    products={products}
+                                    suppliers={suppliers}
+                                    onSave={handleSave}
+                                    onCancel={() => setModalOpen(false)}
+                                />
+                            ) : (
+                                <FormComponent
+                                    type={activeTab}
+                                    item={editingItem}
+                                    onSave={handleSave}
+                                    onCancel={() => setModalOpen(false)}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     )
 }
@@ -574,14 +607,22 @@ const TAB_CONFIGS = {
         label: 'sản phẩm',
         searchPlaceholder: 'Tìm code, tên SP, hãng SX...',
         emptyMessage: 'Chưa có sản phẩm nào',
-        columns: (onEdit, onDelete) => [
+        columns: (onEdit, onDelete, onToggle) => [
             { key: 'code', label: 'Code', sortable: true, width: '100px', render: (v) => <code style={{ color: 'var(--primary-400)', fontSize: 'var(--font-xs)' }}>{v}</code> },
             { key: 'name', label: 'Tên sản phẩm', sortable: true },
             { key: 'manufacturer', label: 'Hãng SX', sortable: true },
             { key: 'unit', label: 'ĐVT', width: '70px' },
             { key: 'storage_condition', label: 'Bảo quản', width: '120px', render: (v) => <StorageBadge condition={v} /> },
-            { key: 'medical_device_class', label: 'Loại', width: '60px', render: (v) => v || '—' },
-            { key: 'safety_stock_qty', label: 'Tồn an toàn', sortable: true, width: '90px' },
+            { key: 'safety_stock_qty', label: 'Tồn AT', sortable: true, width: '70px' },
+            {
+                key: 'is_active', label: 'Trạng thái', width: '90px',
+                render: (v, row) => (
+                    <label className="toggle-switch" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={!!v} onChange={() => onToggle?.(row)} />
+                        <span className="toggle-slider" />
+                    </label>
+                ),
+            },
             {
                 key: 'actions', label: '', width: '80px',
                 render: (_, row) => (
@@ -602,11 +643,20 @@ const TAB_CONFIGS = {
         label: 'bệnh viện',
         searchPlaceholder: 'Tìm tên BV, tỉnh...',
         emptyMessage: 'Chưa có bệnh viện nào',
-        columns: (onEdit, onDelete) => [
+        columns: (onEdit, onDelete, onToggle) => [
             { key: 'name', label: 'Tên bệnh viện', sortable: true },
             { key: 'province', label: 'Tỉnh/TP', sortable: true },
             { key: 'contact_person', label: 'Người liên hệ' },
             { key: 'phone', label: 'SĐT' },
+            {
+                key: 'is_active', label: 'Trạng thái', width: '90px',
+                render: (v, row) => (
+                    <label className="toggle-switch" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={!!v} onChange={() => onToggle?.(row)} />
+                        <span className="toggle-slider" />
+                    </label>
+                ),
+            },
             {
                 key: 'actions', label: '', width: '80px',
                 render: (_, row) => (
@@ -622,7 +672,7 @@ const TAB_CONFIGS = {
         label: 'NCC',
         searchPlaceholder: 'Tìm tên NCC, MST...',
         emptyMessage: 'Chưa có nhà cung cấp nào',
-        columns: (onEdit, onDelete) => [
+        columns: (onEdit, onDelete, onToggle) => [
             { key: 'name', label: 'Tên NCC', sortable: true },
             { key: 'country', label: 'Quốc gia', sortable: true },
             {
@@ -634,8 +684,16 @@ const TAB_CONFIGS = {
                 )
             },
             { key: 'contact_person', label: 'Liên hệ' },
-            { key: 'phone', label: 'SĐT' },
             { key: 'payment_terms', label: 'Điều khoản TT' },
+            {
+                key: 'is_active', label: 'Trạng thái', width: '90px',
+                render: (v, row) => (
+                    <label className="toggle-switch" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={!!v} onChange={() => onToggle?.(row)} />
+                        <span className="toggle-slider" />
+                    </label>
+                ),
+            },
             {
                 key: 'actions', label: '', width: '80px',
                 render: (_, row) => (
@@ -651,7 +709,7 @@ const TAB_CONFIGS = {
         label: 'ĐV vận chuyển',
         searchPlaceholder: 'Tìm tên ĐV VC...',
         emptyMessage: 'Chưa có đơn vị vận chuyển nào',
-        columns: (onEdit, onDelete) => [
+        columns: (onEdit, onDelete, onToggle) => [
             { key: 'name', label: 'Tên ĐV VC', sortable: true },
             { key: 'phone', label: 'SĐT' },
             { key: 'vehicle_type', label: 'Loại xe' },
@@ -662,6 +720,15 @@ const TAB_CONFIGS = {
                         color: v ? 'var(--blue-500)' : 'var(--text-tertiary)',
                     }}>{v ? '❄️ Có' : '— Không'}</span>
                 )
+            },
+            {
+                key: 'is_active', label: 'Trạng thái', width: '90px',
+                render: (v, row) => (
+                    <label className="toggle-switch" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={!!v} onChange={() => onToggle?.(row)} />
+                        <span className="toggle-slider" />
+                    </label>
+                ),
             },
             {
                 key: 'actions', label: '', width: '80px',

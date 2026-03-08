@@ -134,6 +134,31 @@ export default function PurchaseForecastPage() {
                 )}
             />
 
+            {/* Stat Cards */}
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gap: 'var(--space-3)', marginBottom: 'var(--space-5)',
+            }}>
+                {[
+                    { label: 'Tổng phiếu', value: forecasts.length, color: '#6C5CE7', icon: <ClipboardList size={18} /> },
+                    { label: 'Nháp', value: forecasts.filter(f => f.status === 'draft').length, color: '#718096', icon: <Package size={18} /> },
+                    { label: 'Chờ duyệt', value: forecasts.filter(f => f.status === 'pending').length, color: '#FDCB6E', icon: <AlertTriangle size={18} /> },
+                    { label: 'Đã duyệt', value: forecasts.filter(f => f.status === 'approved').length, color: '#00B894', icon: <CheckCircle size={18} /> },
+                ].map(s => (
+                    <div key={s.label} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            background: `color-mix(in srgb, ${s.color} 12%, transparent)`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0,
+                        }}>{s.icon}</div>
+                        <div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500 }}>{s.label}</div>
+                            <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.2 }}>{s.value}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
                 {[
                     { key: 'all', label: 'Tất cả', count: forecasts.length },

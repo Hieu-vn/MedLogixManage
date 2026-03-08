@@ -398,79 +398,69 @@ export default function WarehouseReceiptPage() {
                         </div>
                     </div>
 
-                    {/* Tabs */}
-                    <div style={{ display: 'flex', gap: 'var(--space-1)', borderBottom: '1px solid var(--border)' }}>
-                        {[
-                            { key: 'items', label: 'Chi tiết nhập', icon: <Package size={14} /> },
-                            { key: 'verify', label: 'Đối chiếu', icon: <CheckCircle size={14} /> },
-                        ].map(t => (
-                            <button key={t.key}
-                                onClick={() => setTab(t.key)}
-                                style={{
-                                    padding: 'var(--space-2) var(--space-3)',
-                                    display: 'flex', alignItems: 'center', gap: 6,
-                                    background: 'none', border: 'none', cursor: 'pointer',
-                                    borderBottom: tab === t.key ? '2px solid var(--primary)' : 'none',
-                                    color: tab === t.key ? 'var(--primary)' : 'var(--text-tertiary)',
-                                    fontWeight: tab === t.key ? 600 : 400,
-                                }}>
-                                {t.icon} {t.label}
-                            </button>
-                        ))}
+                    {/* Side-by-side layout (wireframe W1): Mặt hàng | Đối chiếu */}
+                    <div style={{
+                        display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)',
+                        gap: 'var(--space-4)',
+                    }}>
+                        {/* Left: Item details */}
+                        <div>
+                            <h4 style={{ marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Package size={16} /> Mặt hàng nhập kho
+                            </h4>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="data-table" style={{ fontSize: 'var(--font-xs)' }}>
+                                    <thead>
+                                        <tr>
+                                            <th>#</th><th>Code</th><th>Tên SP</th>
+                                            <th>Lot</th><th>HSD</th><th>SL PO</th><th>SL thực</th>
+                                            <th>±</th><th>BQ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {receipt.receipt_items?.map((item, idx) => (
+                                            <tr key={item.id} style={item.is_quarantine ? { background: 'rgba(214,48,49,0.05)' } : {}}>
+                                                <td>{idx + 1}</td>
+                                                <td><span className="code-badge">{item.product?.code}</span></td>
+                                                <td>{item.product?.name}</td>
+                                                <td>{item.lot_number}</td>
+                                                <td>{formatDate(item.expiry_date)}</td>
+                                                <td style={{ textAlign: 'right' }}>{item.po_quantity}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.actual_quantity}</td>
+                                                <td style={{
+                                                    textAlign: 'right', fontWeight: 600,
+                                                    color: item.discrepancy !== 0 ? '#D63031' : '#00B894',
+                                                }}>
+                                                    {item.discrepancy !== 0 ? `${item.discrepancy > 0 ? '-' : '+'}${Math.abs(item.discrepancy)} ⚠️` : '✅'}
+                                                </td>
+                                                <td>{item.is_quarantine ? <ShieldAlert size={12} style={{ color: '#D63031' }} /> : '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Right: Cross-verification */}
+                        <div>
+                            <h4 style={{ marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <CheckCircle size={16} /> Đối chiếu
+                            </h4>
+                            <CrossVerificationPanel
+                                sourceLabel="PO / Invoice"
+                                targetLabel="Nhập kho thực tế"
+                                sourceItems={sourceForVerify}
+                                targetItems={targetForVerify}
+                                onConfirm={async (result) => {
+                                    await supabase.from('warehouse_receipts').update({
+                                        cross_verify_status: result.status,
+                                        cross_verify_detail: result.mismatches,
+                                    }).eq('id', receipt.id)
+                                    toast.success('Đã lưu kết quả đối chiếu nhập kho!')
+                                }}
+                            />
+                        </div>
                     </div>
-
-                    {tab === 'items' && (
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th><th>Code</th><th>Tên SP</th>
-                                    <th>Lot</th><th>HSD</th><th>SL PO</th><th>SL thực</th>
-                                    <th>Chênh lệch</th><th>Bảo quản</th><th>Vị trí</th><th>BT</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {receipt.receipt_items?.map((item, idx) => (
-                                    <tr key={item.id} style={item.is_quarantine ? { background: 'rgba(214,48,49,0.05)' } : {}}>
-                                        <td>{idx + 1}</td>
-                                        <td><span className="code-badge">{item.product?.code}</span></td>
-                                        <td>{item.product?.name}</td>
-                                        <td>{item.lot_number}</td>
-                                        <td>{formatDate(item.expiry_date)}</td>
-                                        <td style={{ textAlign: 'right' }}>{item.po_quantity}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.actual_quantity}</td>
-                                        <td style={{
-                                            textAlign: 'right', fontWeight: 600,
-                                            color: item.discrepancy !== 0 ? '#D63031' : '#00B894',
-                                        }}>
-                                            {item.discrepancy !== 0 ? `${item.discrepancy > 0 ? '-' : '+'}${Math.abs(item.discrepancy)} ⚠️` : '✅ 0'}
-                                        </td>
-                                        <td>
-                                            {item.storage_condition === 'normal' ? '🏠 Thường' :
-                                                item.storage_condition === 'cool' ? '❄️ Mát' : '🧊 Lạnh'}
-                                        </td>
-                                        <td>{item.storage_location || '—'}</td>
-                                        <td>{item.is_quarantine ? <ShieldAlert size={14} style={{ color: '#D63031' }} /> : '—'}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-
-                    {tab === 'verify' && (
-                        <CrossVerificationPanel
-                            sourceLabel="PO / Invoice"
-                            targetLabel="Nhập kho thực tế"
-                            sourceItems={sourceForVerify}
-                            targetItems={targetForVerify}
-                            onConfirm={async (result) => {
-                                await supabase.from('warehouse_receipts').update({
-                                    cross_verify_status: result.status,
-                                    cross_verify_detail: result.mismatches,
-                                }).eq('id', receipt.id)
-                                toast.success('Đã lưu kết quả đối chiếu nhập kho!')
-                            }}
-                        />
-                    )}
 
                     {/* Status actions */}
                     {isRole(ROLES.WAREHOUSE_KEEPER, ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (

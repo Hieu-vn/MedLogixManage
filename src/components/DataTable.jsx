@@ -290,14 +290,18 @@ export default function DataTable({
                 </table>
             </div>
 
-            {/* Footer: Pagination + Page size */}
+            {/* Footer: Pagination + Page size — wireframe style */}
             {(totalPages > 1 || sortedData.length > 10) && (
                 <div className="pagination" style={{ flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <span>
-                            {((currentPage - 1) * pageSize) + 1}—{Math.min(currentPage * pageSize, sortedData.length)} / {sortedData.length}
-                            {search && ` (tìm từ ${data.length})`}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontWeight: 500 }}>
+                            Trang {currentPage} / {totalPages}
                         </span>
+                        <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+                        <span>{((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, sortedData.length)} / {sortedData.length} dòng</span>
+                        {search && <span style={{ color: 'var(--text-tertiary)' }}>(lọc từ {data.length})</span>}
+                        <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+                        <span>Số dòng:</span>
                         <select
                             className="form-select"
                             value={pageSize}
