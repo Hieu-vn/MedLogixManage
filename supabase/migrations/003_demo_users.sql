@@ -1,0 +1,19 @@
+-- ========================================
+-- MedLogixManage — Create Demo Users
+-- Run this AFTER running 001 & 002 schemas
+-- Uses Supabase Auth Admin API
+-- ========================================
+-- NOTE: Supabase free tier cannot run auth.admin functions from SQL Editor.
+-- Use the setup script (003_setup_users.js) instead.
+-- This file documents the intended user accounts.
+
+-- Demo accounts (password: demo123 for all):
+-- 1. admin@medlogix.com      → role: admin        → System Admin
+-- 2. giamdoc@medlogix.com    → role: director      → Giám đốc
+-- 3. qlsales@medlogix.com    → role: sales_manager  → QL Sales
+-- 4. logistics@medlogix.com  → role: logistics_manager → QL Logistics
+-- 5. thukho@medlogix.com     → role: warehouse_keeper → Thủ Kho
+-- 6. sales1@medlogix.com     → role: sales         → A. Thái
+-- 7. sales2@medlogix.com     → role: sales         → A. Phương
+-- 8. sales3@medlogix.com     → role: sales         → A. Hoàng
+-- 9. sales4@medlogix.com     → role: sales         → A. Cao

@@ -1,0 +1,525 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
+import { useToast } from '../components/Toast'
+import DataTable from '../components/DataTable'
+import Modal from '../components/Modal'
+import PageHeader from '../components/PageHeader'
+import { StatusBadge, PriorityBadge } from '../components/Badges'
+import { generateCode, formatDate, formatCurrency, getExpiryWarning, calculatePriority } from '../lib/helpers'
+import {
+    Plus, Eye, Send, ClipboardList, CheckCircle, XCircle,
+    AlertTriangle, Package, ArrowRight, Zap
+} from 'lucide-react'
+
+export default function PurchaseForecastPage() {
+    const { profile } = useAuth()
+    const toast = useToast()
+    const [forecasts, setForecasts] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [createModalOpen, setCreateModalOpen] = useState(false)
+    const [viewModalOpen, setViewModalOpen] = useState(false)
+    const [viewingForecast, setViewingForecast] = useState(null)
+    const [statusFilter, setStatusFilter] = useState('all')
+
+    const isLogistics = ['logistics_manager', 'admin'].includes(profile?.role)
+
+    useEffect(() => { fetchForecasts() }, [])
+
+    async function fetchForecasts() {
+        setLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('purchase_forecasts')
+                .select(`
+          *,
+          creator:created_by(full_name),
+          approver:approved_by(full_name),
+          purchase_forecast_items(
+            id, total_requested, current_stock, qty_to_purchase, approved_qty,
+            priority, earliest_needed_date, notes,
+            product:product_id(id, code, name, unit, storage_condition),
+            supplier:supplier_id(id, name)
+          )
+        `)
+                .order('created_at', { ascending: false })
+            if (error) throw error
+            setForecasts(data || [])
+        } catch (err) {
+            toast.error('Lỗi tải dự trù mua hàng: ' + err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    function handleView(f) { setViewingForecast(f); setViewModalOpen(true) }
+
+    async function handleSubmit(f) {
+        if (!f.purchase_forecast_items?.length) { toast.warning('Chưa có sản phẩm!'); return }
+        try {
+            const { error } = await supabase
+                .from('purchase_forecasts')
+                .update({ status: 'pending' })
+                .eq('id', f.id)
+            if (error) throw error
+            toast.success(`Đã gửi ${f.code} chờ duyệt`)
+            fetchForecasts()
+        } catch (err) { toast.error('Lỗi: ' + err.message) }
+    }
+
+    async function handleApprove(forecast) {
+        try {
+            // Update items: set approved_qty = qty_to_purchase for all
+            const items = forecast.purchase_forecast_items || []
+            for (const item of items) {
+                await supabase
+                    .from('purchase_forecast_items')
+                    .update({ approved_qty: item.qty_to_purchase })
+                    .eq('id', item.id)
+            }
+            const { error } = await supabase
+                .from('purchase_forecasts')
+                .update({
+                    status: 'approved',
+                    approved_by: profile.id,
+                    approved_at: new Date().toISOString(),
+                })
+                .eq('id', forecast.id)
+            if (error) throw error
+            toast.success(`Đã duyệt ${forecast.code}`)
+            fetchForecasts(); setViewModalOpen(false)
+        } catch (err) { toast.error('Lỗi: ' + err.message) }
+    }
+
+    const filtered = statusFilter === 'all' ? forecasts : forecasts.filter(f => f.status === statusFilter)
+
+    const columns = [
+        {
+            key: 'code', label: 'Mã phiếu', sortable: true, width: '140px',
+            render: (v) => <code style={{ color: 'var(--primary-400)', fontSize: 'var(--font-xs)' }}>{v}</code>
+        },
+        {
+            key: 'consolidation_date', label: 'Ngày tổng hợp', sortable: true, width: '120px',
+            render: (v) => formatDate(v)
+        },
+        { key: 'creator', label: 'Người tạo', width: '140px', render: (v) => v?.full_name || '—' },
+        {
+            key: 'purchase_forecast_items', label: 'Số SP', width: '70px',
+            render: (v) => <span style={{ background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-xs)', fontWeight: 600 }}>{v?.length || 0}</span>
+        },
+        { key: 'status', label: 'Trạng thái', width: '120px', render: (v) => <StatusBadge status={v} /> },
+        {
+            key: 'actions', label: '', width: '120px',
+            render: (_, row) => (
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleView(row) }} title="Xem"><Eye size={14} /></button>
+                    {row.status === 'draft' && isLogistics && (
+                        <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleSubmit(row) }} title="Gửi duyệt" style={{ color: 'var(--accent-500)' }}><Send size={14} /></button>
+                    )}
+                </div>
+            )
+        },
+    ]
+
+    return (
+        <div>
+            <PageHeader
+                title="Dự trù mua hàng"
+                subtitle="Tổng hợp nhu cầu từ phiếu dự trù Sales đã duyệt"
+                icon={<ClipboardList size={20} />}
+                actions={isLogistics && (
+                    <button className="btn btn-primary" onClick={() => setCreateModalOpen(true)}>
+                        <Plus size={16} /> Tạo phiếu tổng hợp
+                    </button>
+                )}
+            />
+
+            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+                {[
+                    { key: 'all', label: 'Tất cả', count: forecasts.length },
+                    { key: 'draft', label: '📝 Nháp', count: forecasts.filter(f => f.status === 'draft').length },
+                    { key: 'pending', label: '⏳ Chờ duyệt', count: forecasts.filter(f => f.status === 'pending').length },
+                    { key: 'approved', label: '✅ Đã duyệt', count: forecasts.filter(f => f.status === 'approved').length },
+                ].map(c => (
+                    <button key={c.key} className={`btn btn-sm ${statusFilter === c.key ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setStatusFilter(c.key)}>
+                        {c.label} ({c.count})
+                    </button>
+                ))}
+            </div>
+
+            <DataTable columns={columns} data={filtered} loading={loading}
+                searchPlaceholder="Tìm mã phiếu..." searchKeys={['code']}
+                emptyMessage="Chưa có phiếu dự trù mua hàng"
+                exportable exportFilename="du_tru_mua_hang" />
+
+            <CreatePurchaseForecastModal
+                isOpen={createModalOpen}
+                onClose={() => setCreateModalOpen(false)}
+                onCreated={() => { setCreateModalOpen(false); fetchForecasts() }}
+                profile={profile}
+            />
+
+            <ViewPurchaseForecastModal
+                isOpen={viewModalOpen}
+                onClose={() => setViewModalOpen(false)}
+                forecast={viewingForecast}
+                isLogistics={isLogistics}
+                onApprove={handleApprove}
+            />
+        </div>
+    )
+}
+
+// ========================================
+// Create Modal — consolidate from approved sales forecasts
+// ========================================
+function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
+    const toast = useToast()
+    const [approvedSFs, setApprovedSFs] = useState([])
+    const [selectedSFs, setSelectedSFs] = useState([])
+    const [consolidatedItems, setConsolidatedItems] = useState([])
+    const [suppliers, setSuppliers] = useState([])
+    const [inventoryLots, setInventoryLots] = useState([])
+    const [saving, setSaving] = useState(false)
+    const [step, setStep] = useState(1) // 1: select SFs, 2: review items
+
+    useEffect(() => {
+        if (isOpen) {
+            setStep(1); setSelectedSFs([]); setConsolidatedItems([])
+            loadData()
+        }
+    }, [isOpen])
+
+    async function loadData() {
+        const [sfRes, suppRes, invRes] = await Promise.all([
+            supabase.from('sales_forecasts')
+                .select(`*, sales_forecast_items(*, product:product_id(*), hospital:hospital_id(*))`)
+                .eq('status', 'approved').order('created_at', { ascending: false }),
+            supabase.from('suppliers').select('id, name, is_domestic').eq('is_active', true).order('name'),
+            supabase.from('inventory_lots').select('product_id, quantity, expiry_date')
+                .eq('status', 'available'),
+        ])
+        setApprovedSFs(sfRes.data || [])
+        setSuppliers(suppRes.data || [])
+        setInventoryLots(invRes.data || [])
+    }
+
+    function toggleSF(sf) {
+        setSelectedSFs(prev =>
+            prev.some(s => s.id === sf.id) ? prev.filter(s => s.id !== sf.id) : [...prev, sf]
+        )
+    }
+
+    function consolidate() {
+        const itemMap = new Map()
+
+        for (const sf of selectedSFs) {
+            for (const item of (sf.sales_forecast_items || [])) {
+                const key = item.product?.id
+                if (!key) continue
+
+                if (itemMap.has(key)) {
+                    const existing = itemMap.get(key)
+                    existing.total_requested += item.quantity
+                    if (item.needed_date < existing.earliest_needed_date) {
+                        existing.earliest_needed_date = item.needed_date
+                    }
+                } else {
+                    // Calculate current stock from inventory lots
+                    const lots = inventoryLots.filter(l => l.product_id === key)
+                    const currentStock = lots.reduce((sum, l) => sum + l.quantity, 0)
+                    const nearestExpiry = lots.length > 0
+                        ? lots.reduce((min, l) => l.expiry_date < min ? l.expiry_date : min, lots[0].expiry_date)
+                        : null
+
+                    itemMap.set(key, {
+                        product_id: key,
+                        product: item.product,
+                        total_requested: item.quantity,
+                        current_stock: currentStock,
+                        qty_to_purchase: Math.max(0, item.quantity - currentStock),
+                        earliest_needed_date: item.needed_date,
+                        nearest_expiry: nearestExpiry,
+                        priority: 'normal',
+                        supplier_id: '',
+                        notes: '',
+                    })
+                }
+            }
+        }
+
+        // Recalculate qty_to_purchase and priority
+        const items = Array.from(itemMap.values()).map(item => {
+            item.qty_to_purchase = Math.max(0, item.total_requested - item.current_stock)
+            item.priority = calculatePriority(item.earliest_needed_date, item.current_stock, item.total_requested)
+            return item
+        })
+
+        // Sort by priority: urgent first
+        items.sort((a, b) => {
+            const order = { urgent: 0, normal: 1, low: 2 }
+            return (order[a.priority] || 1) - (order[b.priority] || 1)
+        })
+
+        setConsolidatedItems(items)
+        setStep(2)
+    }
+
+    function updateItem(index, key, value) {
+        setConsolidatedItems(prev => prev.map((item, i) => i === index ? { ...item, [key]: value } : item))
+    }
+
+    async function handleSave() {
+        setSaving(true)
+        try {
+            const code = generateCode('PF')
+            const { data: pf, error: pfErr } = await supabase
+                .from('purchase_forecasts')
+                .insert({
+                    code,
+                    consolidation_date: new Date().toISOString().split('T')[0],
+                    status: 'draft',
+                    created_by: profile.id,
+                })
+                .select()
+                .single()
+            if (pfErr) throw pfErr
+
+            const pfItems = consolidatedItems.map(item => ({
+                forecast_id: pf.id,
+                product_id: item.product_id,
+                supplier_id: item.supplier_id || null,
+                total_requested: item.total_requested,
+                current_stock: item.current_stock,
+                qty_to_purchase: item.qty_to_purchase,
+                priority: item.priority,
+                earliest_needed_date: item.earliest_needed_date,
+                notes: item.notes,
+            }))
+
+            const { error: itemsErr } = await supabase.from('purchase_forecast_items').insert(pfItems)
+            if (itemsErr) throw itemsErr
+
+            // Mark selected SFs as transferred
+            for (const sf of selectedSFs) {
+                await supabase.from('sales_forecasts').update({ status: 'transferred' }).eq('id', sf.id)
+            }
+
+            toast.success(`Tạo phiếu ${code} thành công (${consolidatedItems.length} SP)`)
+            onCreated()
+        } catch (err) {
+            toast.error('Lỗi: ' + err.message)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    if (!isOpen) return null
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}
+            title={step === 1 ? 'Bước 1: Chọn phiếu dự trù đã duyệt' : 'Bước 2: Xác nhận tổng hợp'}
+            size="xl"
+            footer={
+                step === 1 ? (
+                    <>
+                        <button className="btn btn-ghost" onClick={onClose}>Hủy</button>
+                        <button className="btn btn-primary" onClick={consolidate} disabled={selectedSFs.length === 0}>
+                            <ArrowRight size={16} /> Tổng hợp ({selectedSFs.length} phiếu)
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <button className="btn btn-ghost" onClick={() => setStep(1)}>← Quay lại</button>
+                        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                            {saving ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> Đang lưu...</> : 'Tạo phiếu'}
+                        </button>
+                    </>
+                )
+            }>
+            {step === 1 ? (
+                /* Step 1: Select approved SFs */
+                approvedSFs.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--text-tertiary)' }}>
+                        Không có phiếu dự trù nào đã duyệt. Vui lòng duyệt phiếu từ Sales trước.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                        {approvedSFs.map(sf => {
+                            const selected = selectedSFs.some(s => s.id === sf.id)
+                            return (
+                                <div key={sf.id} onClick={() => toggleSF(sf)} style={{
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                                    padding: 'var(--space-3) var(--space-4)',
+                                    background: selected ? 'rgba(108,92,231,0.1)' : 'var(--bg-tertiary)',
+                                    border: `1px solid ${selected ? 'var(--primary-500)' : 'var(--border-secondary)'}`,
+                                    borderRadius: 'var(--radius-md)',
+                                    cursor: 'pointer', transition: 'all var(--transition-fast)',
+                                }}>
+                                    <input type="checkbox" checked={selected} readOnly style={{ width: 18, height: 18 }} />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                            <code style={{ color: 'var(--primary-400)', fontSize: 'var(--font-xs)' }}>{sf.code}</code>
+                                            <span style={{ fontWeight: 500 }}>{sf.title}</span>
+                                        </div>
+                                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                            {sf.sales_forecast_items?.length || 0} SP  •  {formatDate(sf.request_date)}
+                                        </div>
+                                    </div>
+                                    <StatusBadge status={sf.status} />
+                                </div>
+                            )
+                        })}
+                    </div>
+                )
+            ) : (
+                /* Step 2: Review consolidated items */
+                <div>
+                    <div style={{
+                        padding: 'var(--space-3) var(--space-4)', background: 'rgba(9,132,227,0.08)',
+                        borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)',
+                        fontSize: 'var(--font-sm)', color: 'var(--blue-500)',
+                    }}>
+                        ℹ️ Tổng hợp từ {selectedSFs.length} phiếu → {consolidatedItems.length} sản phẩm. Kiểm tra và điều chỉnh SL mua, NCC, ưu tiên.
+                    </div>
+
+                    <div className="table-container" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '35px' }}>#</th>
+                                    <th>Sản phẩm</th>
+                                    <th style={{ width: '75px' }}>Yêu cầu</th>
+                                    <th style={{ width: '75px' }}>Tồn kho</th>
+                                    <th style={{ width: '85px' }}>Cần mua</th>
+                                    <th style={{ width: '90px' }}>Ưu tiên</th>
+                                    <th style={{ width: '130px' }}>NCC</th>
+                                    <th style={{ width: '100px' }}>Ngày cần</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {consolidatedItems.map((item, i) => (
+                                    <tr key={i} style={item.priority === 'urgent' ? { background: 'rgba(214,48,49,0.05)' } : {}}>
+                                        <td style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-xs)' }}>{i + 1}</td>
+                                        <td>
+                                            <div style={{ fontWeight: 500, fontSize: 'var(--font-sm)' }}>{item.product?.name}</div>
+                                            <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>{item.product?.code} • {item.product?.unit}</div>
+                                        </td>
+                                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{item.total_requested}</td>
+                                        <td style={{ textAlign: 'center', color: item.current_stock === 0 ? 'var(--red-400)' : 'var(--text-secondary)' }}>
+                                            {item.current_stock}
+                                        </td>
+                                        <td>
+                                            <input type="number" className="form-input" value={item.qty_to_purchase} min={0}
+                                                onChange={(e) => updateItem(i, 'qty_to_purchase', Number(e.target.value))}
+                                                style={{ fontSize: 'var(--font-xs)', padding: '3px 6px', textAlign: 'center', fontWeight: 700, color: 'var(--accent-500)' }} />
+                                        </td>
+                                        <td>
+                                            <select className="form-select" value={item.priority}
+                                                onChange={(e) => updateItem(i, 'priority', e.target.value)}
+                                                style={{ fontSize: 'var(--font-xs)', padding: '3px 6px' }}>
+                                                <option value="urgent">🔴 Gấp</option>
+                                                <option value="normal">🟡 Bình thường</option>
+                                                <option value="low">🟢 Thấp</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select className="form-select" value={item.supplier_id}
+                                                onChange={(e) => updateItem(i, 'supplier_id', e.target.value)}
+                                                style={{ fontSize: 'var(--font-xs)', padding: '3px 6px' }}>
+                                                <option value="">Chọn...</option>
+                                                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                        </td>
+                                        <td style={{ fontSize: 'var(--font-xs)' }}>{formatDate(item.earliest_needed_date)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </Modal>
+    )
+}
+
+// ========================================
+// View Modal
+// ========================================
+function ViewPurchaseForecastModal({ isOpen, onClose, forecast, isLogistics, onApprove }) {
+    if (!isOpen || !forecast) return null
+    const items = forecast.purchase_forecast_items || []
+    const canApprove = isLogistics && forecast.status === 'pending'
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Phiếu: ${forecast.code}`} size="xl"
+            footer={
+                canApprove ? (
+                    <>
+                        <button className="btn btn-ghost" onClick={onClose}>Đóng</button>
+                        <button className="btn btn-success" onClick={() => onApprove(forecast)}>
+                            <CheckCircle size={16} /> Duyệt phiếu
+                        </button>
+                    </>
+                ) : <button className="btn btn-ghost" onClick={onClose}>Đóng</button>
+            }>
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gap: 'var(--space-4)', marginBottom: 'var(--space-5)',
+                padding: 'var(--space-4)', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)',
+            }}>
+                <div>
+                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Ngày tổng hợp</div>
+                    <div style={{ fontWeight: 600 }}>{formatDate(forecast.consolidation_date)}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người tạo</div>
+                    <div style={{ fontWeight: 600 }}>{forecast.creator?.full_name || '—'}</div>
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Trạng thái</div>
+                    <div><StatusBadge status={forecast.status} /></div>
+                </div>
+                <div>
+                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Tổng SP</div>
+                    <div style={{ fontWeight: 600 }}>{items.length}</div>
+                </div>
+            </div>
+
+            <div className="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style={{ width: '35px' }}>#</th>
+                            <th>Sản phẩm</th>
+                            <th style={{ width: '70px' }}>YC</th>
+                            <th style={{ width: '70px' }}>Tồn</th>
+                            <th style={{ width: '80px' }}>Cần mua</th>
+                            <th style={{ width: '80px' }}>Ưu tiên</th>
+                            <th>NCC</th>
+                            <th style={{ width: '100px' }}>Ngày cần</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items.map((item, i) => (
+                            <tr key={item.id} style={item.priority === 'urgent' ? { background: 'rgba(214,48,49,0.05)' } : {}}>
+                                <td style={{ color: 'var(--text-tertiary)' }}>{i + 1}</td>
+                                <td>
+                                    <div style={{ fontWeight: 500 }}>{item.product?.name || '—'}</div>
+                                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>{item.product?.code}</div>
+                                </td>
+                                <td style={{ textAlign: 'center' }}>{item.total_requested}</td>
+                                <td style={{ textAlign: 'center', color: item.current_stock === 0 ? 'var(--red-400)' : '' }}>{item.current_stock}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent-500)' }}>{item.qty_to_purchase}</td>
+                                <td><PriorityBadge priority={item.priority} /></td>
+                                <td style={{ fontSize: 'var(--font-sm)' }}>{item.supplier?.name || '—'}</td>
+                                <td style={{ fontSize: 'var(--font-xs)' }}>{formatDate(item.earliest_needed_date)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </Modal>
+    )
+}

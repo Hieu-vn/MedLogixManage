@@ -1,0 +1,144 @@
+============================================================
+  NETWORK DIAGNOSTIC REPORT - 2026-03-08 13:34:19
+============================================================
+
+=== 1. NETWORK ADAPTER STATUS ===
+  Adapter: Wi-Fi
+  Interface: Intel(R) Wi-Fi 6E AX211 160MHz
+  Status: Up
+  Link Speed: 200 Mbps
+  MAC: C4-03-A8-27-CC-0C
+
+=== 2. IP CONFIGURATION ===
+  Interface: Wi-Fi
+  IPv4 Address: 192.168.1.7
+  Subnet Prefix: 24
+  Default Gateway: 192.168.1.1
+  DNS Servers: 123.23.23.23, 123.26.26.26
+
+=== 3. WIFI CONNECTION DETAILS ===
+  
+  There is 1 interface on the system: 
+  
+      Name                   : Wi-Fi
+      Description            : Intel(R) Wi-Fi 6E AX211 160MHz
+      GUID                   : 2bb4e088-4c19-4683-9fc3-bacdc60abbe4
+      Physical address       : c4:03:a8:27:cc:0c
+      Interface type         : Primary
+      State                  : connected
+      SSID                   : Hieu.5G
+      AP BSSID               : d4:9a:a0:d0:a4:01
+      Band                   : 5 GHz
+      Channel                : 36
+      Connected Akm-cipher   : [ akm = 00-0f-ac:02, cipher =  00-0f-ac:04 ]
+      Network type           : Infrastructure
+      Radio type             : 802.11ac
+      Authentication         : WPA2-Personal
+      Cipher                 : CCMP
+      Connection mode        : Profile
+      Receive rate (Mbps)    : 162
+      Transmit rate (Mbps)   : 200
+      Signal                 : 90% 
+      Rssi                   : -47
+      Profile                : Hieu.5G 
+      QoS MSCS Configured         : 0
+      QoS Map Configured          : 0
+      QoS Map Allowed by Policy   : 0
+  
+
+=== 4. SPEED TEST (Download) ===
+  Testing: Cloudflare (10MB)...
+    Downloaded: 9.54 MB
+    Time: 6.62s
+    Speed: 12.09 Mbps
+
+  Testing: Google (gstatic)...
+    Response time: 268ms (connectivity check)
+
+=== 5. LATENCY TEST (Ping) ===
+  Pinging Default Gateway (192.168.1.1) - 10 packets...
+    Avg: 1.1ms | Min: 0ms | Max: 2ms | Jitter: 0.4ms | Loss: 0%
+
+  Pinging Google DNS (8.8.8.8) - 10 packets...
+    Avg: 51.1ms | Min: 51ms | Max: 52ms | Jitter: 0.2ms | Loss: 0%
+
+  Pinging Cloudflare DNS (1.1.1.1) - 10 packets...
+    Avg: 30.7ms | Min: 30ms | Max: 31ms | Jitter: 0.4ms | Loss: 0%
+
+  Pinging Google.com (google.com) - 10 packets...
+    Avg: 44ms | Min: 44ms | Max: 44ms | Jitter: 0ms | Loss: 0%
+
+  Pinging Facebook.com (facebook.com) - 10 packets...
+    Avg: 30.3ms | Min: 25ms | Max: 59ms | Jitter: 8.3ms | Loss: 0%
+
+=== 6. DNS RESOLUTION SPEED ===
+  google.com -> 142.250.197.46 (26ms)
+  facebook.com -> 157.240.199.35 (3ms)
+  github.com -> 20.205.243.166 (4ms)
+  youtube.com -> 142.250.197.238 (3ms)
+  vnexpress.net -> 111.65.250.2 (8ms)
+
+=== 7. TRACEROUTE TO GOOGLE (8.8.8.8) ===
+  (First 15 hops)
+  Remote Address: 8.8.8.8
+  Ping Succeeded: True
+  Round-trip time: 51ms
+    Hop 1 : 192.168.1.1
+    Hop 2 : 203.210.148.18
+    Hop 3 : 123.25.27.153
+    Hop 4 : 113.171.36.172
+    Hop 5 : 0.0.0.0
+    Hop 6 : 113.171.16.95
+    Hop 7 : 113.171.35.119
+    Hop 8 : 72.14.219.148
+    Hop 9 : 108.170.231.19
+    Hop 10 : 142.251.253.111
+    Hop 11 : 8.8.8.8
+
+=== 8. ACTIVE CONNECTIONS ANALYSIS ===
+  Total established connections: 106
+  Top processes by connection count:
+    language_server_windows_x64 : 17 connections
+    language_server_windows_x64 : 11 connections
+    language_server_windows_x64 : 10 connections
+    Antigravity : 9 connections
+    msedgewebview2 : 7 connections
+    Antigravity : 6 connections
+    Antigravity : 5 connections
+    Antigravity : 5 connections
+    chrome : 5 connections
+    Spotify : 4 connections
+
+=== 9. LISTENING PORTS ===
+  Total listening ports: 55
+  Potentially unusual listening ports:
+    Port 5354 - Process: mDNSResponder (PID: 4968)
+    Port 5939 - Process: TeamViewer_Service (PID: 17076)
+    Port 7768 - Process: Spotify (PID: 25368)
+    Port 9010 - Process: lghub_agent (PID: 17900)
+    Port 9222 - Process: msedgewebview2 (PID: 20424)
+
+=== 10. NETWORK INTERFACE STATISTICS ===
+  Adapter: Wi-Fi
+    Bytes Sent: 3.49 MB
+    Bytes Received: 36.81 MB
+    Packets Sent: 4530
+    Packets Received: 9517
+
+=== 11. ARP TABLE (Checking for duplicates) ===
+  No ARP anomalies detected.
+
+=== 12. FIREWALL STATUS ===
+  Domain Profile: ENABLED
+  Private Profile: ENABLED
+  Public Profile: ENABLED
+
+============================================================
+  ANOMALY SUMMARY
+============================================================
+  Total Warnings: 0
+  Total Critical Issues: 0
+  Status: ALL CLEAR - No anomalies detected!
+
+  Report saved to: c:\MedLogixManage\network_report.txt
+============================================================

@@ -1,8 +1,11 @@
-# Temp output files
-excel_output.txt
-excel_data.txt
-excel_data_full.txt
-sheet1_full.txt
+# Dependencies
+node_modules/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
 
 # OS
 Thumbs.db
@@ -12,7 +15,15 @@ Desktop.ini
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Node
-node_modules/
-dist/
+# Temp output files
+excel_output.txt
+excel_data.txt
+excel_data_full.txt
+sheet1_full.txt
+
+# Logs
+*.log
+npm-debug.log*
