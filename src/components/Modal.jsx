@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 
-export default function Modal({ isOpen, onClose, title, children, footer, size = '' }) {
+export default function Modal({ isOpen = true, onClose, title, children, footer, size = '' }) {
     if (!isOpen) return null
 
     const handleOverlayClick = (e) => {

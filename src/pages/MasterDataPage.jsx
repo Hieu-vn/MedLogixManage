@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { StorageBadge } from '../components/Badges'
-import { Plus, Edit2, Trash2, Package, Building2, Truck, Factory, DollarSign, History, X, ChevronRight, Database, Filter } from 'lucide-react'
+import { Plus, Edit2, Trash2, Package, Building2, Truck, Factory, DollarSign, History, X, ChevronRight, Database, Filter, Upload, Download } from 'lucide-react'
 
 const TABS = [
     { key: 'products', label: 'Sản phẩm', icon: Package },
@@ -27,6 +27,7 @@ export default function MasterDataPage() {
     const [historyPanel, setHistoryPanel] = useState(null) // { product_id, supplier_id, product_name }
     const [historyData, setHistoryData] = useState([])
     const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'active' | 'inactive'
+    const [importing, setImporting] = useState(false)
     const toast = useToast()
 
     useEffect(() => {
@@ -165,6 +166,99 @@ export default function MasterDataPage() {
         }
     }
 
+    // ===== Import Excel Price List =====
+    async function handleImportExcel(e) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setImporting(true)
+
+        try {
+            const XLSX = (await import('xlsx')).default
+            const buf = await file.arrayBuffer()
+            const wb = XLSX.read(buf)
+            const ws = wb.Sheets[wb.SheetNames[0]]
+            const rows = XLSX.utils.sheet_to_json(ws)
+
+            if (!rows.length) { toast.warning('File rỗng'); setImporting(false); return }
+
+            // Map Vietnamese column names
+            const mapCol = (row) => ({
+                product_code: row['Mã SP'] || row['product_code'] || '',
+                supplier_name: row['NCC'] || row['supplier_name'] || '',
+                unit_price: row['Đơn giá'] || row['unit_price'] || 0,
+                currency: row['Tiền tệ'] || row['currency'] || 'VND',
+                price_ceiling: row['Giá trần'] || row['price_ceiling'] || null,
+                price_floor: row['Giá sàn'] || row['price_floor'] || null,
+                valid_from: row['Hiệu lực từ'] || row['valid_from'] || null,
+                valid_to: row['Hiệu lực đến'] || row['valid_to'] || null,
+            })
+
+            // Ensure lookups are ready
+            if (!products.length || !suppliers.length) await fetchLookups()
+
+            let imported = 0, skipped = 0, errors = []
+            for (const rawRow of rows) {
+                const row = mapCol(rawRow)
+                if (!row.product_code || !row.unit_price) { skipped++; continue }
+
+                const product = products.find(p => p.code === String(row.product_code).trim())
+                if (!product) { skipped++; errors.push(`Code "${row.product_code}" không tìm thấy`); continue }
+
+                let supplierId = null
+                if (row.supplier_name) {
+                    const supp = suppliers.find(s =>
+                        s.name.toLowerCase().includes(String(row.supplier_name).trim().toLowerCase())
+                    )
+                    if (supp) supplierId = supp.id
+                }
+
+                // Mark old as not current
+                if (supplierId) {
+                    await supabase.from('price_list')
+                        .update({ is_current: false })
+                        .eq('product_id', product.id)
+                        .eq('supplier_id', supplierId)
+                        .eq('is_current', true)
+                }
+
+                const validFrom = row.valid_from || new Date().toISOString().split('T')[0]
+                const { error } = await supabase.from('price_list').insert({
+                    product_id: product.id, supplier_id: supplierId,
+                    unit_price: Number(row.unit_price), currency: row.currency,
+                    price_ceiling: row.price_ceiling ? Number(row.price_ceiling) : null,
+                    price_floor: row.price_floor ? Number(row.price_floor) : null,
+                    valid_from: validFrom, valid_to: row.valid_to || null,
+                    effective_date: validFrom, is_current: true,
+                })
+                if (error) { skipped++; errors.push(`${row.product_code}: ${error.message}`) }
+                else imported++
+            }
+
+            if (imported > 0) toast.success(`Import xong: ${imported} dòng OK${skipped > 0 ? `, ${skipped} bỏ qua` : ''}`)
+            else toast.warning(`Import: ${skipped} dòng bị bỏ qua`)
+            if (errors.length) console.warn('Import errors:', errors)
+            fetchData()
+        } catch (err) {
+            toast.error('Lỗi đọc file: ' + err.message)
+        } finally {
+            setImporting(false)
+            e.target.value = ''
+        }
+    }
+
+    // ===== Download Excel Template =====
+    async function handleDownloadTemplate() {
+        const XLSX = (await import('xlsx')).default
+        const ws = XLSX.utils.aoa_to_sheet([
+            ['Mã SP', 'NCC', 'Đơn giá', 'Tiền tệ', 'Giá trần', 'Giá sàn', 'Hiệu lực từ', 'Hiệu lực đến'],
+            ['SP-001', 'Dräger Vietnam', 125000000, 'VND', 130000000, 120000000, '2026-01-01', '2026-12-31'],
+        ])
+        ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 14 }, { wch: 14 }]
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, 'Bảng giá')
+        XLSX.writeFile(wb, 'template_bang_gia.xlsx')
+    }
+
     const tabConfig = TAB_CONFIGS[activeTab]
 
     return (
@@ -225,6 +319,18 @@ export default function MasterDataPage() {
                                         <option value="active">✅ Đang hoạt động</option>
                                         <option value="inactive">⛔ Ngừng hoạt động</option>
                                     </select>
+                                )}
+                                {activeTab === 'price_list' && (
+                                    <>
+                                        <label className="btn btn-ghost" style={{ cursor: 'pointer', position: 'relative' }}>
+                                            <Upload size={16} />
+                                            {importing ? 'Đang import...' : 'Import Excel'}
+                                            <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={handleImportExcel} disabled={importing} />
+                                        </label>
+                                        <button className="btn btn-ghost" onClick={handleDownloadTemplate}>
+                                            <Download size={16} /> Template
+                                        </button>
+                                    </>
                                 )}
                                 <button className="btn btn-primary" onClick={handleAdd}>
                                     <Plus size={16} /> Thêm {tabConfig.label}

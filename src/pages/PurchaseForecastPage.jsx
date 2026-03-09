@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -15,6 +16,7 @@ import {
 export default function PurchaseForecastPage() {
     const { profile } = useAuth()
     const toast = useToast()
+    const navigate = useNavigate()
     const [forecasts, setForecasts] = useState([])
     const [loading, setLoading] = useState(true)
     const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -69,14 +71,25 @@ export default function PurchaseForecastPage() {
 
     async function handleApprove(forecast) {
         try {
-            // Update items: set approved_qty = qty_to_purchase for all
             const items = forecast.purchase_forecast_items || []
+
+            // === VALIDATE: All items must have supplier_id ===
+            const missingNCC = items.filter(i => !i.supplier_id && !i.supplier?.id)
+            if (missingNCC.length > 0) {
+                const names = missingNCC.map(i => i.product?.name || i.product?.code || '?').join(', ')
+                toast.error(`Chưa gán NCC cho: ${names}. Vui lòng gán NCC trước khi duyệt.`)
+                return
+            }
+
+            // Update items: set approved_qty = qty_to_purchase
             for (const item of items) {
                 await supabase
                     .from('purchase_forecast_items')
                     .update({ approved_qty: item.qty_to_purchase })
                     .eq('id', item.id)
             }
+
+            // Mark forecast as approved
             const { error } = await supabase
                 .from('purchase_forecasts')
                 .update({
@@ -86,8 +99,94 @@ export default function PurchaseForecastPage() {
                 })
                 .eq('id', forecast.id)
             if (error) throw error
-            toast.success(`Đã duyệt ${forecast.code}`)
-            fetchForecasts(); setViewModalOpen(false)
+
+            // === AUTO CREATE POs — group items by supplier_id ===
+            const approvedItems = items.filter(i => i.qty_to_purchase > 0)
+            const bySupplier = {}
+            for (const item of approvedItems) {
+                const sid = item.supplier_id || item.supplier?.id
+                if (!sid) continue
+                if (!bySupplier[sid]) bySupplier[sid] = []
+                bySupplier[sid].push(item)
+            }
+
+            let poCount = 0
+            for (const [supplierId, supplierItems] of Object.entries(bySupplier)) {
+                // Lookup supplier for is_domestic
+                const { data: suppData } = await supabase
+                    .from('suppliers').select('is_domestic, payment_terms').eq('id', supplierId).single()
+
+                // Generate PO code
+                const year = new Date().getFullYear()
+                const { count } = await supabase.from('purchase_orders')
+                    .select('*', { count: 'exact', head: true })
+                const poCode = `PO-${year}-${String((count || 0) + 1).padStart(4, '0')}`
+
+                // Build PO items with price lookup
+                const poItems = []
+                let totalAmount = 0
+                for (const item of supplierItems) {
+                    const { data: plData } = await supabase.from('price_list')
+                        .select('unit_price')
+                        .eq('product_id', item.product_id || item.product?.id)
+                        .eq('supplier_id', supplierId)
+                        .eq('is_current', true)
+                        .maybeSingle()
+                    const unitPrice = plData?.unit_price || 0
+                    const qty = item.approved_qty || item.qty_to_purchase
+                    const lineTotal = qty * unitPrice
+                    totalAmount += lineTotal
+                    poItems.push({
+                        product_id: item.product_id || item.product?.id,
+                        quantity: qty,
+                        unit_price: unitPrice,
+                        price_list_price: unitPrice,
+                        price_deviation_pct: 0,
+                        line_total: lineTotal,
+                    })
+                }
+                const vatAmount = Math.round(totalAmount * 0.08)
+                const grandTotal = totalAmount + vatAmount
+
+                // Insert PO
+                const { data: poData, error: poErr } = await supabase
+                    .from('purchase_orders').insert({
+                        code: poCode,
+                        supplier_id: supplierId,
+                        purchase_forecast_id: forecast.id,
+                        is_domestic: suppData?.is_domestic ?? true,
+                        payment_terms: suppData?.payment_terms || '',
+                        total_amount: totalAmount,
+                        vat_pct: 8,
+                        vat_amount: vatAmount,
+                        grand_total: grandTotal,
+                        status: 'draft',
+                        created_by: profile.id,
+                    }).select().single()
+                if (poErr) throw poErr
+
+                // Insert PO items
+                const itemsPayload = poItems.map(i => ({ ...i, po_id: poData.id }))
+                const { error: piErr } = await supabase.from('po_items').insert(itemsPayload)
+                if (piErr) throw piErr
+                poCount++
+            }
+
+            // Update forecast status to po_created
+            if (poCount > 0) {
+                await supabase.from('purchase_forecasts')
+                    .update({ status: 'po_created' })
+                    .eq('id', forecast.id)
+            }
+
+            toast.success(`Đã duyệt ${forecast.code} — Tự động tạo ${poCount} PO`)
+            fetchForecasts()
+            setViewModalOpen(false)
+
+            // Navigate to PO page after short delay
+            if (poCount > 0) {
+                setTimeout(() => navigate('/purchase-orders'), 800)
+            }
         } catch (err) { toast.error('Lỗi: ' + err.message) }
     }
 

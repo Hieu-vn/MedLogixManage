@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast'
 import CrossVerificationPanel from '../components/CrossVerificationPanel'
 import {
     Plus, Eye, Edit2, Truck, Check, Upload, FileText,
-    AlertTriangle, CheckCircle, XCircle, Globe, DollarSign, Clock
+    AlertTriangle, CheckCircle, XCircle, Globe, DollarSign, Clock, Paperclip
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
 import Modal from '../components/Modal'
@@ -313,6 +313,7 @@ export default function ImportShipmentPage() {
         const [poItems, setPoItems] = useState([])
         const [docItems, setDocItems] = useState({})
         const [editingDoc, setEditingDoc] = useState(null)
+        const [uploading, setUploading] = useState(null) // doc_type being uploaded
 
         useEffect(() => {
             if (shipment.po_id) fetchPOItems()
@@ -349,6 +350,46 @@ export default function ImportShipmentPage() {
             if (error) { toast.error(error.message); return }
             toast.success('Đã cập nhật trạng thái!')
             onClose(); fetchAll()
+        }
+
+        // ===== File Upload =====
+        async function handleFileUpload(docType, file) {
+            if (!file) return
+            setUploading(docType)
+            try {
+                const ext = file.name.split('.').pop()
+                const path = `imports/${shipment.id}/${docType}_${Date.now()}.${ext}`
+
+                const { error: upErr } = await supabase.storage
+                    .from('documents')
+                    .upload(path, file, { upsert: true })
+                if (upErr) throw upErr
+
+                // Get URL (for private bucket, use createSignedUrl in production)
+                const { data: { publicUrl } } = supabase.storage
+                    .from('documents')
+                    .getPublicUrl(path)
+
+                // Save URL to import_documents
+                const doc = docs.find(d => d.doc_type === docType)
+                if (doc) {
+                    await supabase.from('import_documents')
+                        .update({
+                            file_url: publicUrl,
+                            uploaded_at: new Date().toISOString(),
+                            is_checked: true,
+                        })
+                        .eq('id', doc.id)
+                    setDocs(prev => prev.map(d =>
+                        d.id === doc.id ? { ...d, file_url: publicUrl, is_checked: true, uploaded_at: new Date().toISOString() } : d
+                    ))
+                }
+                toast.success(`Upload ${DOC_TYPES.find(d => d.key === docType)?.label} thành công!`)
+            } catch (err) {
+                toast.error('Upload lỗi: ' + err.message)
+            } finally {
+                setUploading(null)
+            }
         }
 
         // Document entry for cross-check
@@ -542,12 +583,30 @@ export default function ImportShipmentPage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                {['commercial_invoice', 'packing_list', 'bill_of_lading'].includes(doc.doc_type) && (
-                                                    <button className="btn btn-ghost btn-sm"
-                                                        onClick={() => setEditingDoc(doc.doc_type)}>
-                                                        <Edit2 size={14} /> Nhập dữ liệu & Đối chiếu
-                                                    </button>
-                                                )}
+                                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                                                    {/* File upload */}
+                                                    <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', opacity: uploading === doc.doc_type ? 0.5 : 1 }}>
+                                                        <Upload size={14} />
+                                                        {uploading === doc.doc_type ? '...' : 'Upload'}
+                                                        <input type="file" accept=".pdf,.jpg,.png,.xlsx,.xls,.doc,.docx" hidden
+                                                            disabled={uploading === doc.doc_type}
+                                                            onChange={e => handleFileUpload(doc.doc_type, e.target.files?.[0])} />
+                                                    </label>
+                                                    {/* View uploaded file */}
+                                                    {doc.file_url && (
+                                                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer"
+                                                            className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-400)' }}>
+                                                            <Paperclip size={14} /> Xem file
+                                                        </a>
+                                                    )}
+                                                    {/* Cross-check entry (only for main 3 docs) */}
+                                                    {['commercial_invoice', 'packing_list', 'bill_of_lading'].includes(doc.doc_type) && (
+                                                        <button className="btn btn-ghost btn-sm"
+                                                            onClick={() => setEditingDoc(doc.doc_type)}>
+                                                            <Edit2 size={14} /> Nhập dữ liệu & Đối chiếu
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         )
                                     })}
