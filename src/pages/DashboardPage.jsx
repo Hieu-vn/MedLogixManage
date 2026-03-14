@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../lib/auth'
-import { supabase } from '../lib/supabase'
+import { useDashboardData } from '../hooks/useSupabaseQuery'
 import { formatCurrency, formatDate, getExpiryWarning } from '../lib/helpers'
 import { StatusBadge } from '../components/Badges'
 import PageHeader from '../components/PageHeader'
@@ -109,148 +109,102 @@ function PipelineStep({ step, isLast }) {
 
 export default function DashboardPage() {
     const { profile } = useAuth()
-    const [stats, setStats] = useState(null)
-    const [loading, setLoading] = useState(true)
+    const { data: raw, isLoading: loading } = useDashboardData()
 
-    useEffect(() => { fetchDashboardData() }, [])
+    // Process raw data into dashboard stats
+    const stats = React.useMemo(() => {
+        if (!raw) return null
+        const { salesForecasts: sf, purchaseForecasts: pf, products: prods, inventoryLots: lots,
+            hospitalCount, supplierCount, recentSF, purchaseOrders: po, importShipments: nk, warehouseReceipts: wr } = raw
 
-    async function fetchDashboardData() {
-        try {
-            const [
-                { data: salesForecasts },
-                { data: purchaseForecasts },
-                { data: products },
-                { data: inventoryLots },
-                { count: hospitalCount },
-                { count: supplierCount },
-                { data: recentSF },
-                { data: purchaseOrders },
-                { data: importShipments },
-                { data: warehouseReceipts },
-            ] = await Promise.all([
-                supabase.from('sales_forecasts').select('id, status'),
-                supabase.from('purchase_forecasts').select('id, status'),
-                supabase.from('products').select('id, name, code, storage_condition, safety_stock_qty, is_active, category'),
-                supabase.from('inventory_lots').select('product_id, quantity, expiry_date, status, storage_condition, unit_cost'),
-                supabase.from('hospitals').select('id', { count: 'exact', head: true }).eq('is_active', true),
-                supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
-                supabase.from('sales_forecasts')
-                    .select('id, code, title, status, request_date, created_by(full_name)')
-                    .order('created_at', { ascending: false }).limit(6),
-                supabase.from('purchase_orders').select('id, status, code, expected_delivery'),
-                supabase.from('import_shipments').select('id, status'),
-                supabase.from('warehouse_receipts').select('id, status'),
-            ])
+        const pendingCount = sf.filter(f => f.status === 'pending').length
+            + pf.filter(f => f.status === 'pending').length
+            + po.filter(f => f.status === 'pending').length
+        const now = new Date()
 
-            const sf = salesForecasts || []
-            const pf = purchaseForecasts || []
-            const lots = inventoryLots || []
-            const prods = products || []
-            const po = purchaseOrders || []
-            const nk = importShipments || []
-            const wr = warehouseReceipts || []
-
-            const pendingCount = sf.filter(f => f.status === 'pending').length
-                + pf.filter(f => f.status === 'pending').length
-                + po.filter(f => f.status === 'pending').length
-            const now = new Date()
-
-            // Expiry alerts
-            const expiryAlerts = lots
-                .filter(l => l.status === 'available' && l.expiry_date)
-                .map(l => {
-                    const warning = getExpiryWarning(l.expiry_date, now)
-                    const prod = prods.find(p => p.id === l.product_id)
-                    return { ...l, warning, productName: prod?.name, productCode: prod?.code }
-                })
-                .filter(l => l.warning.level !== 'ok')
-                .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))
-
-            // Low stock
-            const stockByProduct = {}
-            lots.filter(l => l.status === 'available').forEach(l => {
-                stockByProduct[l.product_id] = (stockByProduct[l.product_id] || 0) + l.quantity
+        // Expiry alerts
+        const expiryAlerts = lots
+            .filter(l => l.status === 'available' && l.expiry_date)
+            .map(l => {
+                const warning = getExpiryWarning(l.expiry_date, now)
+                const prod = prods.find(p => p.id === l.product_id)
+                return { ...l, warning, productName: prod?.name, productCode: prod?.code }
             })
-            const lowStockProducts = prods
-                .filter(p => p.is_active && p.safety_stock_qty > 0)
-                .map(p => ({ ...p, currentStock: stockByProduct[p.id] || 0, deficit: (stockByProduct[p.id] || 0) - p.safety_stock_qty }))
-                .filter(p => p.deficit < 0)
-                .sort((a, b) => a.deficit - b.deficit)
+            .filter(l => l.warning.level !== 'ok')
+            .sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date))
 
-            const expiryCount90 = lots.filter(l => {
-                if (l.status !== 'available' || !l.expiry_date) return false
-                const days = (new Date(l.expiry_date) - now) / (1000 * 60 * 60 * 24)
-                return days <= 90 && days > 0
-            }).length
+        // Low stock
+        const stockByProduct = {}
+        lots.filter(l => l.status === 'available').forEach(l => {
+            stockByProduct[l.product_id] = (stockByProduct[l.product_id] || 0) + l.quantity
+        })
+        const lowStockProducts = prods
+            .filter(p => p.is_active && p.safety_stock_qty > 0)
+            .map(p => ({ ...p, currentStock: stockByProduct[p.id] || 0, deficit: (stockByProduct[p.id] || 0) - p.safety_stock_qty }))
+            .filter(p => p.deficit < 0)
+            .sort((a, b) => a.deficit - b.deficit)
 
-            const stockValue = lots.filter(l => l.status === 'available')
-                .reduce((sum, l) => sum + (l.quantity * (Number(l.unit_cost) || 0)), 0)
+        const expiryCount90 = lots.filter(l => {
+            if (l.status !== 'available' || !l.expiry_date) return false
+            const days = (new Date(l.expiry_date) - now) / (1000 * 60 * 60 * 24)
+            return days <= 90 && days > 0
+        }).length
 
-            const totalLots = lots.filter(l => l.status === 'available').length
+        const stockValue = lots.filter(l => l.status === 'available')
+            .reduce((sum, l) => sum + (l.quantity * (Number(l.unit_cost) || 0)), 0)
 
-            // Pipeline
-            const pipeline = [
-                { label: 'Dự trù Sales', count: sf.filter(f => ['draft', 'pending'].includes(f.status)).length, icon: FileText, color: '#6C5CE7' },
-                { label: 'Dự trù MH', count: pf.filter(f => ['draft', 'pending'].includes(f.status)).length, icon: ClipboardList, color: '#0984E3' },
-                { label: 'Đặt hàng', count: po.filter(f => !['received', 'cancelled'].includes(f.status)).length, icon: ShoppingCart, color: '#00B894' },
-                { label: 'Nhập khẩu', count: nk.filter(f => f.status !== 'completed').length, icon: Ship, color: '#FDCB6E' },
-                { label: 'Nhập kho', count: wr.filter(f => f.status !== 'completed').length, icon: Warehouse, color: '#E17055' },
-            ]
+        const totalLots = lots.filter(l => l.status === 'available').length
 
-            // Chart: Inventory by category
-            const categoryMap = {}
-            prods.forEach(p => {
-                if (!p.is_active) return
-                const cat = p.category || 'Khác'
-                if (!categoryMap[cat]) categoryMap[cat] = { name: cat, stock: 0, products: 0 }
-                categoryMap[cat].products++
-                categoryMap[cat].stock += stockByProduct[p.id] || 0
+        // Pipeline
+        const pipeline = [
+            { label: 'Dự trù Sales', count: sf.filter(f => ['draft', 'pending'].includes(f.status)).length, icon: FileText, color: '#6C5CE7' },
+            { label: 'Dự trù MH', count: pf.filter(f => ['draft', 'pending'].includes(f.status)).length, icon: ClipboardList, color: '#0984E3' },
+            { label: 'Đặt hàng', count: po.filter(f => !['received', 'cancelled'].includes(f.status)).length, icon: ShoppingCart, color: '#00B894' },
+            { label: 'Nhập khẩu', count: nk.filter(f => f.status !== 'completed').length, icon: Ship, color: '#FDCB6E' },
+            { label: 'Nhập kho', count: wr.filter(f => f.status !== 'completed').length, icon: Warehouse, color: '#E17055' },
+        ]
+
+        // Chart: Inventory by category
+        const categoryMap = {}
+        prods.forEach(p => {
+            if (!p.is_active) return
+            const cat = p.category || 'Khác'
+            if (!categoryMap[cat]) categoryMap[cat] = { name: cat, stock: 0, products: 0 }
+            categoryMap[cat].products++
+            categoryMap[cat].stock += stockByProduct[p.id] || 0
+        })
+        const categoryData = Object.values(categoryMap).sort((a, b) => b.stock - a.stock)
+
+        // Chart: Storage condition pie
+        const storagePie = [
+            { name: 'Thường', value: lots.filter(l => l.storage_condition === 'normal' && l.status === 'available').length, color: '#00B894' },
+            { name: 'Mát 2-8°C', value: lots.filter(l => l.storage_condition === 'cool' && l.status === 'available').length, color: '#0984E3' },
+            { name: 'Lạnh -20°C', value: lots.filter(l => l.storage_condition === 'cold' && l.status === 'available').length, color: '#6C5CE7' },
+        ].filter(s => s.value > 0)
+
+        // Chart: Top products by stock quantity
+        const topProducts = Object.entries(stockByProduct)
+            .map(([pid, qty]) => {
+                const prod = prods.find(p => p.id === pid)
+                return { name: prod?.code || pid.substring(0, 8), qty, fullName: prod?.name }
             })
-            const categoryData = Object.values(categoryMap).sort((a, b) => b.stock - a.stock)
+            .sort((a, b) => b.qty - a.qty)
+            .slice(0, 8)
 
-            // Chart: Storage condition pie
-            const storagePie = [
-                { name: 'Thường', value: lots.filter(l => l.storage_condition === 'normal' && l.status === 'available').length, color: '#00B894' },
-                { name: 'Mát 2-8°C', value: lots.filter(l => l.storage_condition === 'cool' && l.status === 'available').length, color: '#0984E3' },
-                { name: 'Lạnh -20°C', value: lots.filter(l => l.storage_condition === 'cold' && l.status === 'available').length, color: '#6C5CE7' },
-            ].filter(s => s.value > 0)
+        // Monthly trend placeholder
+        const monthlyTrend = []
 
-            // Chart: Top products by stock quantity (replaces mock consumption data)
-            const topProducts = Object.entries(stockByProduct)
-                .map(([pid, qty]) => {
-                    const prod = prods.find(p => p.id === pid)
-                    return { name: prod?.code || pid.substring(0, 8), qty, fullName: prod?.name }
-                })
-                .sort((a, b) => b.qty - a.qty)
-                .slice(0, 8)
-
-            // Monthly trend placeholder (needs real delivery data from Module 6)
-            const monthlyTrend = []
-
-            setStats({
-                pendingCount,
-                totalProducts: prods.filter(p => p.is_active).length,
-                totalHospitals: hospitalCount || 0,
-                totalSuppliers: supplierCount || 0,
-                expiryAlerts,
-                lowStockProducts,
-                pipeline,
-                storagePie,
-                categoryData,
-                topProducts,
-                monthlyTrend,
-                recentSF: recentSF || [],
-                expiryCount90,
-                stockValue,
-                totalLots,
-                totalPO: po.length,
-                totalNK: nk.length,
-                totalWR: wr.length,
-            })
-        } catch (err) {
-            console.error('Dashboard error:', err)
-        } finally { setLoading(false) }
-    }
+        return {
+            pendingCount,
+            totalProducts: prods.filter(p => p.is_active).length,
+            totalHospitals: hospitalCount,
+            totalSuppliers: supplierCount,
+            expiryAlerts, lowStockProducts, pipeline, storagePie,
+            categoryData, topProducts, monthlyTrend,
+            recentSF, expiryCount90, stockValue, totalLots,
+            totalPO: po.length, totalNK: nk.length, totalWR: wr.length,
+        }
+    }, [raw])
 
     if (loading) return <SkeletonLoader type="cards" rows={6} />
     if (!stats) return null

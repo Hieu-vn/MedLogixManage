@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useForm } from 'react-hook-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
+import { useSalesForecasts, useProducts, useHospitals } from '../hooks/useSupabaseQuery'
+import { daysFromNow, toISOString } from '../lib/dateUtils'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
@@ -11,14 +15,13 @@ import { generateCode, formatDate } from '../lib/helpers'
 import {
     Plus, Eye, Edit2, Trash2, Send, FileText,
     Search, X, CheckCircle, XCircle, Package,
-    ChevronDown, Clock
+    ChevronDown, Clock, AlertTriangle
 } from 'lucide-react'
 
 export default function SalesForecastPage() {
     const { profile, hasAccess } = useAuth()
     const toast = useToast()
-    const [forecasts, setForecasts] = useState([])
-    const [loading, setLoading] = useState(true)
+    const queryClient = useQueryClient()
     const [modalOpen, setModalOpen] = useState(false)
     const [viewModalOpen, setViewModalOpen] = useState(false)
     const [editingForecast, setEditingForecast] = useState(null)
@@ -29,36 +32,8 @@ export default function SalesForecastPage() {
     const isSales = profile?.role === 'sales'
     const isManager = ['sales_manager', 'admin'].includes(profile?.role)
 
-    useEffect(() => {
-        fetchForecasts()
-    }, [])
-
-    async function fetchForecasts() {
-        setLoading(true)
-        try {
-            let query = supabase
-                .from('sales_forecasts')
-                .select(`
-          *,
-          creator:created_by(full_name),
-          approver:approved_by(full_name),
-          sales_forecast_items(
-            id, quantity, needed_date, notes,
-            product:product_id(id, code, name, unit),
-            hospital:hospital_id(id, name)
-          )
-        `)
-                .order('created_at', { ascending: false })
-
-            const { data, error } = await query
-            if (error) throw error
-            setForecasts(data || [])
-        } catch (err) {
-            toast.error('Lỗi tải phiếu dự trù: ' + err.message)
-        } finally {
-            setLoading(false)
-        }
-    }
+    // React Query: auto-cached forecast list
+    const { data: forecasts = [], isLoading: loading, refetch: fetchForecasts } = useSalesForecasts(statusFilter)
 
     function handleCreate() {
         setEditingForecast(null)
@@ -325,19 +300,25 @@ export default function SalesForecastPage() {
 // ========================================
 function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
     const toast = useToast()
-    const [title, setTitle] = useState('')
-    const [notes, setNotes] = useState('')
+    const queryClient = useQueryClient()
+    // React Hook Form for header fields
+    const { register, handleSubmit, reset, formState: { errors } } = useForm({
+        defaultValues: { title: '', notes: '' },
+    })
     const [items, setItems] = useState([])
     const [saving, setSaving] = useState(false)
-    const [products, setProducts] = useState([])
-    const [hospitals, setHospitals] = useState([])
+    // FR-1.2: Duplicate warning state
+    const [duplicateWarning, setDuplicateWarning] = useState(null)
+    const [pendingSubmitData, setPendingSubmitData] = useState(null)
+
+    // React Query: cached product/hospital lists
+    const { data: products = [] } = useProducts({ enabled: isOpen })
+    const { data: hospitals = [] } = useHospitals({ enabled: isOpen })
 
     useEffect(() => {
         if (isOpen) {
-            loadOptions()
             if (forecast) {
-                setTitle(forecast.title || '')
-                setNotes(forecast.notes || '')
+                reset({ title: forecast.title || '', notes: forecast.notes || '' })
                 setItems(forecast.sales_forecast_items?.map(item => ({
                     id: item.id,
                     product_id: item.product?.id || '',
@@ -349,26 +330,18 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                     _hospitalName: item.hospital?.name || '',
                 })) || [])
             } else {
-                setTitle('')
-                setNotes('')
+                reset({ title: '', notes: '' })
                 setItems([])
             }
+            setDuplicateWarning(null)
+            setPendingSubmitData(null)
         }
-    }, [isOpen, forecast])
-
-    async function loadOptions() {
-        const [{ data: prods }, { data: hosps }] = await Promise.all([
-            supabase.from('products').select('id, code, name, unit').eq('is_active', true).order('code'),
-            supabase.from('hospitals').select('id, name').eq('is_active', true).order('name'),
-        ])
-        setProducts(prods || [])
-        setHospitals(hosps || [])
-    }
+    }, [isOpen, forecast, reset])
 
     function addItem() {
         setItems(prev => [...prev, {
             product_id: '', hospital_id: '', quantity: 1,
-            needed_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            needed_date: daysFromNow(7),
             notes: '',
         }])
     }
@@ -387,10 +360,44 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
         )
     }
 
-    async function handleSave() {
-        if (!title.trim()) { toast.warning('Vui lòng nhập tiêu đề phiếu'); return }
-        if (items.length === 0) { toast.warning('Vui lòng thêm ít nhất 1 sản phẩm'); return }
+    // FR-1.2: Cross-forecast duplicate check
+    async function checkCrossDuplicates(formData) {
+        try {
+            // Query active forecasts (not rejected/cancelled) for same product+hospital
+            const productIds = [...new Set(items.map(i => i.product_id).filter(Boolean))]
+            const hospitalIds = [...new Set(items.map(i => i.hospital_id).filter(Boolean))]
+            if (productIds.length === 0 || hospitalIds.length === 0) return []
 
+            const { data: existingItems } = await supabase
+                .from('sales_forecast_items')
+                .select(`
+                    product_id, hospital_id,
+                    product:products(name, code),
+                    hospital:hospitals(name),
+                    forecast:forecast_id(id, code, status, title)
+                `)
+                .in('product_id', productIds)
+                .in('hospital_id', hospitalIds)
+
+            if (!existingItems) return []
+
+            // Filter: only active forecasts, exclude current forecast if editing
+            const duplicates = existingItems.filter(e => {
+                if (!e.forecast) return false
+                if (['rejected', 'cancelled'].includes(e.forecast.status)) return false
+                if (forecast && e.forecast.id === forecast.id) return false
+                return items.some(i => i.product_id === e.product_id && i.hospital_id === e.hospital_id)
+            })
+
+            return duplicates
+        } catch {
+            return [] // Don't block save on check failure
+        }
+    }
+
+    async function onFormSubmit(formData) {
+        // Validate items
+        if (items.length === 0) { toast.warning('Vui lòng thêm ít nhất 1 sản phẩm'); return }
         for (let i = 0; i < items.length; i++) {
             if (!items[i].product_id) { toast.warning(`Dòng ${i + 1}: Chưa chọn sản phẩm`); return }
             if (!items[i].hospital_id) { toast.warning(`Dòng ${i + 1}: Chưa chọn bệnh viện`); return }
@@ -398,22 +405,39 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
             if (!items[i].needed_date) { toast.warning(`Dòng ${i + 1}: Chưa chọn ngày cần hàng`); return }
         }
 
+        // FR-1.2: Check cross-forecast duplicates
+        const dupes = await checkCrossDuplicates(formData)
+        if (dupes.length > 0 && !pendingSubmitData) {
+            setDuplicateWarning(dupes)
+            setPendingSubmitData(formData)
+            return
+        }
+
+        await executeSave(formData)
+    }
+
+    async function confirmDuplicateAndSave() {
+        if (pendingSubmitData) {
+            await executeSave(pendingSubmitData)
+            setDuplicateWarning(null)
+            setPendingSubmitData(null)
+        }
+    }
+
+    async function executeSave(formData) {
+        const { title, notes } = formData
         setSaving(true)
         try {
             if (forecast) {
-                // Update existing
                 const { error: updateErr } = await supabase
                     .from('sales_forecasts')
-                    .update({ title, notes, updated_at: new Date().toISOString() })
+                    .update({ title, notes, updated_at: toISOString() })
                     .eq('id', forecast.id)
                 if (updateErr) throw updateErr
 
-                // A16: Upsert pattern — preserve existing item IDs
-                // 1. Get existing items
                 const { data: existingItems } = await supabase.from('sales_forecast_items')
                     .select('id, product_id, hospital_id').eq('forecast_id', forecast.id)
 
-                // 2. Build incoming items
                 const newItems = items.map(item => ({
                     forecast_id: forecast.id,
                     product_id: item.product_id,
@@ -423,7 +447,6 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                     notes: item.notes,
                 }))
 
-                // 3. Delete items no longer in the list
                 const incomingKeys = new Set(items.map(i => `${i.product_id}_${i.hospital_id}`))
                 const toDelete = (existingItems || []).filter(e => !incomingKeys.has(`${e.product_id}_${e.hospital_id}`))
                 if (toDelete.length > 0) {
@@ -431,13 +454,11 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                         .delete().in('id', toDelete.map(d => d.id))
                 }
 
-                // 4. Upsert remaining items
                 const { error: itemsErr } = await supabase.from('sales_forecast_items').upsert(newItems, {
                     onConflict: 'forecast_id,product_id,hospital_id',
                     ignoreDuplicates: false,
                 })
                 if (itemsErr) {
-                    // Fallback: if no unique constraint exists, use delete+insert
                     await supabase.from('sales_forecast_items').delete().eq('forecast_id', forecast.id)
                     const { error: fallbackErr } = await supabase.from('sales_forecast_items').insert(newItems)
                     if (fallbackErr) throw fallbackErr
@@ -445,18 +466,10 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
 
                 toast.success('Cập nhật phiếu thành công')
             } else {
-                // Create new
                 const code = generateCode('SF')
                 const { data: newForecast, error: createErr } = await supabase
                     .from('sales_forecasts')
-                    .insert({
-                        code,
-                        title,
-                        notes,
-                        created_by: profile.id,
-                        sales_person: profile.id,
-                        status: 'draft',
-                    })
+                    .insert({ code, title, notes, created_by: profile.id, sales_person: profile.id, status: 'draft' })
                     .select()
                     .single()
                 if (createErr) throw createErr
@@ -474,6 +487,8 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
 
                 toast.success(`Tạo phiếu ${code} thành công`)
             }
+            // Invalidate react-query cache so list refreshes
+            queryClient.invalidateQueries({ queryKey: ['sales_forecasts'] })
             onSaved()
         } catch (err) {
             toast.error('Lỗi: ' + err.message)
@@ -485,6 +500,7 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
     if (!isOpen) return null
 
     return (
+        <>
         <Modal
             isOpen={isOpen}
             onClose={onClose}
@@ -493,29 +509,28 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
             footer={
                 <>
                     <button className="btn btn-ghost" onClick={onClose}>Hủy</button>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                    <button className="btn btn-primary" onClick={handleSubmit(onFormSubmit)} disabled={saving}>
                         {saving ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> Đang lưu...</> : 'Lưu phiếu'}
                     </button>
                 </>
             }
         >
-            {/* Header Fields */}
+            {/* Header Fields — react-hook-form */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 <div className="form-group">
                     <label className="form-label required">Tiêu đề phiếu</label>
                     <input
-                        className="form-input"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
+                        className={`form-input ${errors.title ? 'form-input-error' : ''}`}
+                        {...register('title', { required: 'Vui lòng nhập tiêu đề phiếu' })}
                         placeholder="VD: Dự trù tháng 3/2026 - BV Đà Nẵng"
                     />
+                    {errors.title && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.title.message}</span>}
                 </div>
                 <div className="form-group">
                     <label className="form-label">Ghi chú</label>
                     <input
                         className="form-input"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
+                        {...register('notes')}
                         placeholder="Ghi chú thêm..."
                     />
                 </div>
@@ -633,6 +648,60 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                 </div>
             )}
         </Modal>
+
+        {/* FR-1.2: Cross-forecast duplicate warning */}
+        {duplicateWarning && duplicateWarning.length > 0 && (
+            <div className="modal-overlay" style={{ zIndex: 1100 }}>
+                <div className="modal" style={{ maxWidth: 540 }}>
+                    <div className="modal-header">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <AlertTriangle size={20} style={{ color: '#FDCB6E' }} />
+                            Cảnh báo trùng lặp
+                        </h2>
+                        <button className="btn btn-icon btn-ghost" onClick={() => { setDuplicateWarning(null); setPendingSubmitData(null) }}>
+                            <X size={18} />
+                        </button>
+                    </div>
+                    <div className="modal-body">
+                        <p style={{ marginBottom: 'var(--space-3)' }}>
+                            Các sản phẩm sau đã tồn tại trong phiếu dự trù khác:
+                        </p>
+                        <div className="table-container" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                            <table>
+                                <thead><tr>
+                                    <th>Sản phẩm</th>
+                                    <th>Bệnh viện</th>
+                                    <th>Phiếu</th>
+                                    <th>Trạng thái</th>
+                                </tr></thead>
+                                <tbody>
+                                    {duplicateWarning.map((d, i) => (
+                                        <tr key={i}>
+                                            <td>{d.product?.code || '—'}</td>
+                                            <td>{d.hospital?.name || '—'}</td>
+                                            <td><strong>{d.forecast?.code}</strong></td>
+                                            <td><StatusBadge status={d.forecast?.status} /></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--font-sm)' }}>
+                            Bạn vẫn muốn tiếp tục lưu phiếu?
+                        </p>
+                    </div>
+                    <div className="modal-footer">
+                        <button className="btn btn-ghost" onClick={() => { setDuplicateWarning(null); setPendingSubmitData(null) }}>
+                            Quay lại sửa
+                        </button>
+                        <button className="btn btn-warning" onClick={confirmDuplicateAndSave}>
+                            <AlertTriangle size={14} /> Tiếp tục lưu
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     )
 }
 

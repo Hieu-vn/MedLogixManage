@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/queryClient'
 import { useAuth } from './lib/auth'
 import { ToastProvider } from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -36,53 +38,55 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
     return (
-        <ErrorBoundary>
-            <ToastProvider>
-                <Routes>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route
-                        path="/*"
-                        element={
-                            <ProtectedRoute>
-                                <Layout>
-                                    <Routes>
-                                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                                        <Route path="/dashboard" element={<DashboardPage />} />
-                                        <Route path="/profile" element={<ProfilePage />} />
-                                        <Route path="/master-data" element={
-                                            <RoleGuard module="master_data"><MasterDataPage /></RoleGuard>
-                                        } />
-                                        <Route path="/sales-forecast" element={
-                                            <RoleGuard module="sales_forecast"><SalesForecastPage /></RoleGuard>
-                                        } />
-                                        <Route path="/purchase-forecast" element={
-                                            <RoleGuard module="purchase_forecast"><PurchaseForecastPage /></RoleGuard>
-                                        } />
-                                        <Route path="/purchase-orders" element={
-                                            <RoleGuard module="purchase_order"><PurchaseOrderPage /></RoleGuard>
-                                        } />
-                                        <Route path="/import-shipments" element={
-                                            <RoleGuard module="import_shipment"><ImportShipmentPage /></RoleGuard>
-                                        } />
-                                        <Route path="/warehouse" element={
-                                            <RoleGuard module="warehouse"><WarehouseReceiptPage /></RoleGuard>
-                                        } />
-                                        <Route path="/audit-trail" element={
-                                            <RoleGuard module="audit_trail"><AuditTrailPage /></RoleGuard>
-                                        } />
-                                        <Route path="*" element={
-                                            <div className="empty-state">
-                                                <h3>🚧 Đang phát triển</h3>
-                                                <p style={{ color: 'var(--text-tertiary)', marginTop: '8px' }}>Module này sẽ sớm được hoàn thiện</p>
-                                            </div>
-                                        } />
-                                    </Routes>
-                                </Layout>
-                            </ProtectedRoute>
-                        }
-                    />
-                </Routes>
-            </ToastProvider>
-        </ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+            <ErrorBoundary>
+                <ToastProvider>
+                    <Routes>
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route
+                            path="/*"
+                            element={
+                                <ProtectedRoute>
+                                    <Layout>
+                                        <Routes>
+                                            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                                            <Route path="/dashboard" element={<DashboardPage />} />
+                                            <Route path="/profile" element={<ProfilePage />} />
+                                            <Route path="/master-data" element={
+                                                <RoleGuard module="master_data"><MasterDataPage /></RoleGuard>
+                                            } />
+                                            <Route path="/sales-forecast" element={
+                                                <RoleGuard module="sales_forecast"><SalesForecastPage /></RoleGuard>
+                                            } />
+                                            <Route path="/purchase-forecast" element={
+                                                <RoleGuard module="purchase_forecast"><PurchaseForecastPage /></RoleGuard>
+                                            } />
+                                            <Route path="/purchase-orders" element={
+                                                <RoleGuard module="purchase_order"><PurchaseOrderPage /></RoleGuard>
+                                            } />
+                                            <Route path="/import-shipments" element={
+                                                <RoleGuard module="import_shipment"><ImportShipmentPage /></RoleGuard>
+                                            } />
+                                            <Route path="/warehouse" element={
+                                                <RoleGuard module="warehouse"><WarehouseReceiptPage /></RoleGuard>
+                                            } />
+                                            <Route path="/audit-trail" element={
+                                                <RoleGuard module="audit_trail"><AuditTrailPage /></RoleGuard>
+                                            } />
+                                            <Route path="*" element={
+                                                <div className="empty-state">
+                                                    <h3>🚧 Đang phát triển</h3>
+                                                    <p style={{ color: 'var(--text-tertiary)', marginTop: '8px' }}>Module này sẽ sớm được hoàn thiện</p>
+                                                </div>
+                                            } />
+                                        </Routes>
+                                    </Layout>
+                                </ProtectedRoute>
+                            }
+                        />
+                    </Routes>
+                </ToastProvider>
+            </ErrorBoundary>
+        </QueryClientProvider>
     )
 }
