@@ -164,7 +164,7 @@ export default function DashboardPage() {
             { label: 'Nhập kho', count: wr.filter(f => f.status !== 'completed').length, icon: Warehouse, color: '#E17055' },
         ]
 
-        // Chart: Inventory by category
+        // Chart: Inventory by category (only categories with actual stock)
         const categoryMap = {}
         prods.forEach(p => {
             if (!p.is_active) return
@@ -173,7 +173,9 @@ export default function DashboardPage() {
             categoryMap[cat].products++
             categoryMap[cat].stock += stockByProduct[p.id] || 0
         })
-        const categoryData = Object.values(categoryMap).sort((a, b) => b.stock - a.stock)
+        const categoryData = Object.values(categoryMap)
+            .filter(c => c.stock > 0)
+            .sort((a, b) => b.stock - a.stock)
 
         // Chart: Storage condition pie
         const storagePie = [
@@ -269,13 +271,14 @@ export default function DashboardPage() {
                             <Package size={16} style={{ color: '#6C5CE7' }} /> Tồn kho theo danh mục
                         </h3>
                     </div>
-                    <div className="card-body" style={{ height: 260 }}>
+                    <div className="card-body" style={{ height: Math.max(200, stats.categoryData.length * 40 + 40) }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.categoryData} layout="vertical" margin={{ left: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" />
                                 <XAxis type="number" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
-                                <YAxis dataKey="name" type="category" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} width={80} />
-                                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                                <YAxis dataKey="name" type="category" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} width={120} />
+                                <Tooltip contentStyle={TOOLTIP_STYLE}
+                                    formatter={(value, name, props) => [`${value} đơn vị (${props.payload.products} SP)`, 'Tồn kho']} />
                                 <defs>
                                     <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
                                         <stop offset="0%" stopColor="#6C5CE7" />
