@@ -145,7 +145,7 @@ export default function ImportShipmentPage() {
                 // FR-3.4: B/L date auto-fill PO expected_delivery
                 if (form.declaration_date && form.po_id) {
                     const blDate = new Date(form.declaration_date)
-                    blDate.setDate(blDate.getDate() + 3) // +3 days transport buffer
+                    blDate.setDate(blDate.getDate() + 1) // +1 day transport buffer (per spec FR-3.4)
                     const updateData = {
                         expected_delivery: blDate.toISOString().split('T')[0],
                         updated_at: new Date().toISOString(),

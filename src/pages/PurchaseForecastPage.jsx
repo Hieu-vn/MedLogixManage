@@ -7,7 +7,7 @@ import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
-import { generateCode, formatDate, formatCurrency, getExpiryWarning, calculatePriority } from '../lib/helpers'
+import { generateCode, formatDate, formatCurrency, getExpiryWarning, calculatePriority, STORAGE_CONDITIONS, monthsBetween } from '../lib/helpers'
 import {
     Plus, Eye, Send, ClipboardList, CheckCircle, XCircle,
     AlertTriangle, Package, ArrowRight, Zap
@@ -322,7 +322,8 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                 .eq('status', 'approved').order('created_at', { ascending: false }),
             supabase.from('suppliers').select('id, name, is_domestic').eq('is_active', true).order('name'),
             supabase.from('inventory_lots').select('product_id, quantity, expiry_date')
-                .eq('status', 'available'),
+                .eq('status', 'available')
+                .neq('status', 'quarantine'),
         ])
         setApprovedSFs(sfRes.data || [])
         setSuppliers(suppRes.data || [])
@@ -351,10 +352,17 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                     }
                 } else {
                     // Calculate current stock from inventory lots
-                    const lots = inventoryLots.filter(l => l.product_id === key)
-                    const currentStock = lots.reduce((sum, l) => sum + l.quantity, 0)
-                    const nearestExpiry = lots.length > 0
-                        ? lots.reduce((min, l) => l.expiry_date < min ? l.expiry_date : min, lots[0].expiry_date)
+                    // FR-2.2: Loại bỏ lô có HSD < 8 tháng khỏi tồn kho khả dụng
+                    const allLots = inventoryLots.filter(l => l.product_id === key)
+                    const usableLots = allLots.filter(l => {
+                        if (!l.expiry_date) return true
+                        return monthsBetween(new Date(), l.expiry_date) >= 8
+                    })
+                    const currentStock = usableLots.reduce((sum, l) => sum + l.quantity, 0)
+                    const nearExpiry = allLots.filter(l => l.expiry_date && monthsBetween(new Date(), l.expiry_date) < 8)
+                    const nearExpiryQty = nearExpiry.reduce((sum, l) => sum + l.quantity, 0)
+                    const nearestExpiry = allLots.length > 0
+                        ? allLots.reduce((min, l) => l.expiry_date && l.expiry_date < min ? l.expiry_date : min, allLots[0]?.expiry_date || null)
                         : null
 
                     itemMap.set(key, {
@@ -362,6 +370,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                         product: item.product,
                         total_requested: item.quantity,
                         current_stock: currentStock,
+                        near_expiry_qty: nearExpiryQty,
                         qty_to_purchase: Math.max(0, item.quantity - currentStock),
                         earliest_needed_date: item.needed_date,
                         nearest_expiry: nearestExpiry,
@@ -527,12 +536,28 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                                     <tr key={i} style={item.priority === 'urgent' ? { background: 'rgba(214,48,49,0.05)' } : {}}>
                                         <td style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-xs)' }}>{i + 1}</td>
                                         <td>
-                                            <div style={{ fontWeight: 500, fontSize: 'var(--font-sm)' }}>{item.product?.name}</div>
+                                            <div style={{ fontWeight: 500, fontSize: 'var(--font-sm)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                {item.product?.name}
+                                                {/* FR-2.4: Cảnh báo bảo quản đặc biệt */}
+                                                {item.product?.storage_condition && item.product.storage_condition !== 'normal' && (
+                                                    <span title={STORAGE_CONDITIONS[item.product.storage_condition]?.label} style={{
+                                                        fontSize: '0.7rem', background: `${STORAGE_CONDITIONS[item.product.storage_condition]?.color}15`,
+                                                        padding: '1px 5px', borderRadius: 4, color: STORAGE_CONDITIONS[item.product.storage_condition]?.color,
+                                                    }}>{STORAGE_CONDITIONS[item.product.storage_condition]?.icon} {STORAGE_CONDITIONS[item.product.storage_condition]?.label}</span>
+                                                )}
+                                            </div>
                                             <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>{item.product?.code} • {item.product?.unit}</div>
                                         </td>
                                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{item.total_requested}</td>
                                         <td style={{ textAlign: 'center', color: item.current_stock === 0 ? 'var(--red-400)' : 'var(--text-secondary)' }}>
                                             {item.current_stock}
+                                            {/* FR-2.2/2.3: Cảnh báo lô HSD sắp hết */}
+                                            {item.near_expiry_qty > 0 && (
+                                                <div style={{ fontSize: '0.6rem', color: '#D63031', marginTop: 1 }}
+                                                     title={`${item.near_expiry_qty} đvt tồn kho HSD < 8 tháng đã bị loại`}>
+                                                    ⚠️ -{item.near_expiry_qty} HSD sát
+                                                </div>
+                                            )}
                                         </td>
                                         <td>
                                             <input type="number" className="form-input" value={item.qty_to_purchase} min={0}

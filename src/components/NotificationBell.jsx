@@ -14,8 +14,8 @@ export default function NotificationBell() {
 
     useEffect(() => {
         fetchNotifications()
-        // Refresh every 60s
-        const interval = setInterval(fetchNotifications, 60000)
+        // A8: Refresh every 120s (was 60s) to reduce backend load
+        const interval = setInterval(fetchNotifications, 120000)
         return () => clearInterval(interval)
     }, [])
 
@@ -23,78 +23,65 @@ export default function NotificationBell() {
         try {
             const now = new Date()
             const items = []
-
-            // 1. PO pending approval
-            const { data: pendingPOs } = await supabase.from('purchase_orders')
-                .select('id, code, grand_total, created_at')
-                .eq('status', 'pending')
-                ; (pendingPOs || []).forEach(po => {
-                    items.push({
-                        id: `po-pending-${po.id}`,
-                        type: 'warning',
-                        icon: Clock,
-                        title: `PO ${po.code} chờ GĐ duyệt`,
-                        time: po.created_at,
-                    })
-                })
-
-            // 2. PO overdue delivery
-            const { data: overduePOs } = await supabase.from('purchase_orders')
-                .select('id, code, expected_delivery')
-                .not('status', 'in', '("received","cancelled")')
-                .lt('expected_delivery', now.toISOString().split('T')[0])
-                ; (overduePOs || []).forEach(po => {
-                    const days = Math.floor((now - new Date(po.expected_delivery)) / (1000 * 60 * 60 * 24))
-                    items.push({
-                        id: `po-overdue-${po.id}`,
-                        type: 'danger',
-                        icon: AlertTriangle,
-                        title: `PO ${po.code} trễ giao ${days} ngày`,
-                        time: po.expected_delivery,
-                    })
-                })
-
-            // 3. Lots expiring within 60 days
             const future60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
-            const { data: expiringLots } = await supabase.from('inventory_lots')
-                .select('id, lot_number, expiry_date, product_id, products(code, name)')
-                .eq('status', 'available')
-                .lt('expiry_date', future60.toISOString().split('T')[0])
-                .gt('expiry_date', now.toISOString().split('T')[0])
-                ; (expiringLots || []).forEach(lot => {
+
+            // A8: Batch into 3 parallel queries instead of 5 sequential
+            const [poResult, lotsResult, productsResult] = await Promise.all([
+                // Query 1: All PO data needed (pending + overdue)
+                supabase.from('purchase_orders')
+                    .select('id, code, grand_total, created_at, status, expected_delivery')
+                    .not('status', 'in', '("received","cancelled")'),
+                // Query 2: Expiring lots  
+                supabase.from('inventory_lots')
+                    .select('id, lot_number, expiry_date, product_id, quantity, status, products(code, name)')
+                    .eq('status', 'available'),
+                // Query 3: Products with safety stock
+                supabase.from('products')
+                    .select('id, code, name, safety_stock_qty')
+                    .eq('is_active', true)
+                    .gt('safety_stock_qty', 0),
+            ])
+
+            // Process POs: pending + overdue
+            const allPOs = poResult.data || []
+            allPOs.filter(po => po.status === 'pending').forEach(po => {
+                items.push({
+                    id: `po-pending-${po.id}`, type: 'warning', icon: Clock,
+                    title: `PO ${po.code} chờ GĐ duyệt`, time: po.created_at,
+                })
+            })
+            allPOs.filter(po => po.expected_delivery && new Date(po.expected_delivery) < now).forEach(po => {
+                const days = Math.floor((now - new Date(po.expected_delivery)) / (1000 * 60 * 60 * 24))
+                items.push({
+                    id: `po-overdue-${po.id}`, type: 'danger', icon: AlertTriangle,
+                    title: `PO ${po.code} trễ giao ${days} ngày`, time: po.expected_delivery,
+                })
+            })
+
+            // Process lots: expiring + low stock
+            const allLots = lotsResult.data || []
+            allLots.filter(l => l.expiry_date && new Date(l.expiry_date) < future60 && new Date(l.expiry_date) > now)
+                .forEach(lot => {
                     const days = Math.floor((new Date(lot.expiry_date) - now) / (1000 * 60 * 60 * 24))
                     items.push({
-                        id: `expiry-${lot.id}`,
-                        type: days <= 30 ? 'danger' : 'warning',
-                        icon: Package,
-                        title: `${lot.products?.code} lot ${lot.lot_number} hết hạn ${days}d`,
-                        time: lot.expiry_date,
+                        id: `expiry-${lot.id}`, type: days <= 30 ? 'danger' : 'warning', icon: Package,
+                        title: `${lot.products?.code} lot ${lot.lot_number} hết hạn ${days}d`, time: lot.expiry_date,
                     })
                 })
 
-            // 4. Low stock warnings
-            const { data: products } = await supabase.from('products')
-                .select('id, code, name, safety_stock_qty')
-                .eq('is_active', true)
-                .gt('safety_stock_qty', 0)
-            const { data: lots } = await supabase.from('inventory_lots')
-                .select('product_id, quantity')
-                .eq('status', 'available')
-
+            // Low stock from lots aggregation
             const stockMap = {}
-                ; (lots || []).forEach(l => { stockMap[l.product_id] = (stockMap[l.product_id] || 0) + l.quantity })
-                ; (products || []).forEach(p => {
-                    const current = stockMap[p.id] || 0
-                    if (current < p.safety_stock_qty) {
-                        items.push({
-                            id: `lowstock-${p.id}`,
-                            type: 'warning',
-                            icon: AlertTriangle,
-                            title: `${p.code} tồn ${current}/${p.safety_stock_qty} (thiếu ${p.safety_stock_qty - current})`,
-                            time: now.toISOString(),
-                        })
-                    }
-                })
+            allLots.forEach(l => { stockMap[l.product_id] = (stockMap[l.product_id] || 0) + l.quantity })
+            ;(productsResult.data || []).forEach(p => {
+                const current = stockMap[p.id] || 0
+                if (current < p.safety_stock_qty) {
+                    items.push({
+                        id: `lowstock-${p.id}`, type: 'warning', icon: AlertTriangle,
+                        title: `${p.code} tồn ${current}/${p.safety_stock_qty} (thiếu ${p.safety_stock_qty - current})`,
+                        time: now.toISOString(),
+                    })
+                }
+            })
 
             // Sort by severity then time
             items.sort((a, b) => {

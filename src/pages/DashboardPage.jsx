@@ -127,7 +127,6 @@ export default function DashboardPage() {
                 { data: purchaseOrders },
                 { data: importShipments },
                 { data: warehouseReceipts },
-                { data: consumption },
             ] = await Promise.all([
                 supabase.from('sales_forecasts').select('id, status, code, title, request_date, created_by(full_name)'),
                 supabase.from('purchase_forecasts').select('id, status, code'),
@@ -141,7 +140,6 @@ export default function DashboardPage() {
                 supabase.from('purchase_orders').select('id, status, code'),
                 supabase.from('import_shipments').select('id, status, code'),
                 supabase.from('warehouse_receipts').select('id, status, code'),
-                supabase.from('mock_consumption').select('product_id, qty_delivered, month'),
             ])
 
             const sf = salesForecasts || []
@@ -151,7 +149,6 @@ export default function DashboardPage() {
             const po = purchaseOrders || []
             const nk = importShipments || []
             const wr = warehouseReceipts || []
-            const cons = consumption || []
 
             const pendingCount = sf.filter(f => f.status === 'pending').length
                 + pf.filter(f => f.status === 'pending').length
@@ -356,40 +353,17 @@ export default function DashboardPage() {
                             <TrendingUp size={16} style={{ color: '#0984E3' }} /> Xu hướng giá trị tồn kho
                         </h3>
                     </div>
-                    <div className="card-body" style={{ height: 260 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={[
-                                { month: 'T1', value: stats.stockValue * 0.7 },
-                                { month: 'T2', value: stats.stockValue * 0.75 },
-                                { month: 'T3', value: stats.stockValue * 0.8 },
-                                { month: 'T4', value: stats.stockValue * 0.85 },
-                                { month: 'T5', value: stats.stockValue * 0.82 },
-                                { month: 'T6', value: stats.stockValue * 0.9 },
-                                { month: 'T7', value: stats.stockValue * 0.88 },
-                                { month: 'T8', value: stats.stockValue * 0.95 },
-                                { month: 'T9', value: stats.stockValue * 0.92 },
-                                { month: 'T10', value: stats.stockValue * 0.97 },
-                                { month: 'T11', value: stats.stockValue * 0.98 },
-                                { month: 'T12', value: stats.stockValue },
-                            ]} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                                <defs>
-                                    <linearGradient id="stockGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#0984E3" stopOpacity={0.25} />
-                                        <stop offset="95%" stopColor="#0984E3" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" />
-                                <XAxis dataKey="month" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
-                                <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
-                                    tickFormatter={v => v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v} />
-                                <Tooltip contentStyle={TOOLTIP_STYLE}
-                                    formatter={v => [formatCurrency(v), 'Giá trị']} />
-                                <Area type="monotone" dataKey="value" name="Stock VND" stroke="#0984E3"
-                                    fillOpacity={1} fill="url(#stockGradient)" strokeWidth={2}
-                                    dot={{ fill: '#0984E3', r: 3, strokeWidth: 0 }}
-                                    activeDot={{ r: 5, fill: '#0984E3', stroke: 'white', strokeWidth: 2 }} />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                    <div className="card-body" style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                        <TrendingUp size={40} style={{ color: 'var(--text-quaternary)', opacity: 0.5 }} />
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Chưa đủ dữ liệu lịch sử</div>
+                            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)', maxWidth: 280 }}>
+                                Biểu đồ xu hướng sẽ hiển thị khi hệ thống có dữ liệu nhập/xuất kho từ ≥ 3 tháng.
+                            </div>
+                        </div>
+                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--primary-400)', fontWeight: 500 }}>
+                            Giá trị tồn kho hiện tại: {formatCurrency(stats.stockValue)}
+                        </div>
                     </div>
                 </div>
             </div>

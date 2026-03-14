@@ -37,9 +37,10 @@ export function formatDateTime(dateStr) {
 }
 
 /**
- * Generate unique code using timestamp
+ * Generate unique code using timestamp + strong random suffix
+ * A14: Increased from 2-digit random (1/100) to 6-char alphanumeric (1/2.2B)
  * @param {string} prefix - e.g., 'SF', 'PF', 'PO'
- * @returns {string} e.g., 'SF-2026-0308-143022'
+ * @returns {string} e.g., 'SF-20260308-143022-a3f1b2'
  */
 export function generateCode(prefix) {
     const now = new Date()
@@ -49,8 +50,8 @@ export function generateCode(prefix) {
     const h = String(now.getHours()).padStart(2, '0')
     const m = String(now.getMinutes()).padStart(2, '0')
     const s = String(now.getSeconds()).padStart(2, '0')
-    const rand = String(Math.floor(Math.random() * 100)).padStart(2, '0')
-    return `${prefix}-${year}${month}${day}-${h}${m}${s}${rand}`
+    const rand = Math.random().toString(36).substring(2, 8)
+    return `${prefix}-${year}${month}${day}-${h}${m}${s}-${rand}`
 }
 
 /**

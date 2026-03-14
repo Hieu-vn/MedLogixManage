@@ -197,6 +197,9 @@ export default function MasterDataPage() {
             if (!products.length || !suppliers.length) await fetchLookups()
 
             let imported = 0, skipped = 0, errors = []
+            const newPrices = []
+            const deactivateKeys = []
+
             for (const rawRow of rows) {
                 const row = mapCol(rawRow)
                 if (!row.product_code || !row.unit_price) { skipped++; continue }
@@ -212,17 +215,12 @@ export default function MasterDataPage() {
                     if (supp) supplierId = supp.id
                 }
 
-                // Mark old as not current
                 if (supplierId) {
-                    await supabase.from('price_list')
-                        .update({ is_current: false })
-                        .eq('product_id', product.id)
-                        .eq('supplier_id', supplierId)
-                        .eq('is_current', true)
+                    deactivateKeys.push({ product_id: product.id, supplier_id: supplierId })
                 }
 
                 const validFrom = row.valid_from || new Date().toISOString().split('T')[0]
-                const { error } = await supabase.from('price_list').insert({
+                newPrices.push({
                     product_id: product.id, supplier_id: supplierId,
                     unit_price: Number(row.unit_price), currency: row.currency,
                     price_ceiling: row.price_ceiling ? Number(row.price_ceiling) : null,
@@ -230,8 +228,28 @@ export default function MasterDataPage() {
                     valid_from: validFrom, valid_to: row.valid_to || null,
                     effective_date: validFrom, is_current: true,
                 })
-                if (error) { skipped++; errors.push(`${row.product_code}: ${error.message}`) }
-                else imported++
+                imported++
+            }
+
+            // A9: Batch operations — 2 queries instead of 2N
+            // Step 1: Deactivate old prices for affected product-supplier pairs
+            if (deactivateKeys.length > 0) {
+                for (const key of deactivateKeys) {
+                    await supabase.from('price_list')
+                        .update({ is_current: false })
+                        .eq('product_id', key.product_id)
+                        .eq('supplier_id', key.supplier_id)
+                        .eq('is_current', true)
+                }
+            }
+
+            // Step 2: Batch insert all new prices
+            if (newPrices.length > 0) {
+                const { error } = await supabase.from('price_list').insert(newPrices)
+                if (error) {
+                    imported = 0
+                    errors.push(error.message)
+                }
             }
 
             if (imported > 0) toast.success(`Import xong: ${imported} dòng OK${skipped > 0 ? `, ${skipped} bỏ qua` : ''}`)
