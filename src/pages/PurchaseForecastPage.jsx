@@ -111,33 +111,37 @@ export default function PurchaseForecastPage() {
             }
 
             let poCount = 0
+            // A11: Pre-fetch all needed data before the loop
+            const allSupplierIds = Object.keys(bySupplier)
+            const { data: allSuppliersData } = await supabase
+                .from('suppliers').select('id, is_domestic, payment_terms')
+                .in('id', allSupplierIds)
+            const suppLookup = Object.fromEntries((allSuppliersData || []).map(s => [s.id, s]))
+
+            const { data: allPrices } = await supabase.from('price_list')
+                .select('product_id, supplier_id, unit_price')
+                .eq('is_current', true)
+                .in('supplier_id', allSupplierIds)
+            const priceLookup = {}
+            ;(allPrices || []).forEach(p => {
+                priceLookup[`${p.product_id}_${p.supplier_id}`] = p.unit_price
+            })
+
             for (const [supplierId, supplierItems] of Object.entries(bySupplier)) {
-                // Lookup supplier for is_domestic
-                const { data: suppData } = await supabase
-                    .from('suppliers').select('is_domestic, payment_terms').eq('id', supplierId).single()
+                const suppData = suppLookup[supplierId]
+                const poCode = generateCode('PO')
 
-                // Generate PO code
-                const year = new Date().getFullYear()
-                const { count } = await supabase.from('purchase_orders')
-                    .select('*', { count: 'exact', head: true })
-                const poCode = `PO-${year}-${String((count || 0) + 1).padStart(4, '0')}`
-
-                // Build PO items with price lookup
+                // Build PO items with pre-fetched price lookup
                 const poItems = []
                 let totalAmount = 0
                 for (const item of supplierItems) {
-                    const { data: plData } = await supabase.from('price_list')
-                        .select('unit_price')
-                        .eq('product_id', item.product_id || item.product?.id)
-                        .eq('supplier_id', supplierId)
-                        .eq('is_current', true)
-                        .maybeSingle()
-                    const unitPrice = plData?.unit_price || 0
+                    const productId = item.product_id || item.product?.id
+                    const unitPrice = priceLookup[`${productId}_${supplierId}`] || 0
                     const qty = item.approved_qty || item.qty_to_purchase
                     const lineTotal = qty * unitPrice
                     totalAmount += lineTotal
                     poItems.push({
-                        product_id: item.product_id || item.product?.id,
+                        product_id: productId,
                         quantity: qty,
                         unit_price: unitPrice,
                         price_list_price: unitPrice,

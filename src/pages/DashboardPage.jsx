@@ -121,25 +121,25 @@ export default function DashboardPage() {
                 { data: purchaseForecasts },
                 { data: products },
                 { data: inventoryLots },
-                { data: hospitals },
-                { data: suppliers },
+                { count: hospitalCount },
+                { count: supplierCount },
                 { data: recentSF },
                 { data: purchaseOrders },
                 { data: importShipments },
                 { data: warehouseReceipts },
             ] = await Promise.all([
-                supabase.from('sales_forecasts').select('id, status, code, title, request_date, created_by(full_name)'),
-                supabase.from('purchase_forecasts').select('id, status, code'),
+                supabase.from('sales_forecasts').select('id, status'),
+                supabase.from('purchase_forecasts').select('id, status'),
                 supabase.from('products').select('id, name, code, storage_condition, safety_stock_qty, is_active, category'),
-                supabase.from('inventory_lots').select('id, product_id, quantity, expiry_date, status, storage_condition, unit_cost'),
-                supabase.from('hospitals').select('id').eq('is_active', true),
-                supabase.from('suppliers').select('id').eq('is_active', true),
+                supabase.from('inventory_lots').select('product_id, quantity, expiry_date, status, storage_condition, unit_cost'),
+                supabase.from('hospitals').select('id', { count: 'exact', head: true }).eq('is_active', true),
+                supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
                 supabase.from('sales_forecasts')
                     .select('id, code, title, status, request_date, created_by(full_name)')
                     .order('created_at', { ascending: false }).limit(6),
-                supabase.from('purchase_orders').select('id, status, code'),
-                supabase.from('import_shipments').select('id, status, code'),
-                supabase.from('warehouse_receipts').select('id, status, code'),
+                supabase.from('purchase_orders').select('id, status, code, expected_delivery'),
+                supabase.from('import_shipments').select('id, status'),
+                supabase.from('warehouse_receipts').select('id, status'),
             ])
 
             const sf = salesForecasts || []
@@ -215,13 +215,8 @@ export default function DashboardPage() {
                 { name: 'Lạnh -20°C', value: lots.filter(l => l.storage_condition === 'cold' && l.status === 'available').length, color: '#6C5CE7' },
             ].filter(s => s.value > 0)
 
-            // Chart: Top products by consumption
-            const consMap = {}
-            cons.forEach(c => {
-                if (!consMap[c.product_id]) consMap[c.product_id] = 0
-                consMap[c.product_id] += c.qty_delivered
-            })
-            const topProducts = Object.entries(consMap)
+            // Chart: Top products by stock quantity (replaces mock consumption data)
+            const topProducts = Object.entries(stockByProduct)
                 .map(([pid, qty]) => {
                     const prod = prods.find(p => p.id === pid)
                     return { name: prod?.code || pid.substring(0, 8), qty, fullName: prod?.name }
@@ -229,22 +224,14 @@ export default function DashboardPage() {
                 .sort((a, b) => b.qty - a.qty)
                 .slice(0, 8)
 
-            // Monthly consumption trend
-            const monthlyMap = {}
-            cons.forEach(c => {
-                const key = c.month?.substring(0, 7)
-                if (key) {
-                    if (!monthlyMap[key]) monthlyMap[key] = { month: key, qty: 0 }
-                    monthlyMap[key].qty += c.qty_delivered
-                }
-            })
-            const monthlyTrend = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
+            // Monthly trend placeholder (needs real delivery data from Module 6)
+            const monthlyTrend = []
 
             setStats({
                 pendingCount,
                 totalProducts: prods.filter(p => p.is_active).length,
-                totalHospitals: (hospitals || []).length,
-                totalSuppliers: (suppliers || []).length,
+                totalHospitals: hospitalCount || 0,
+                totalSuppliers: supplierCount || 0,
                 expiryAlerts,
                 lowStockProducts,
                 pipeline,

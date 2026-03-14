@@ -229,8 +229,14 @@ export default function PurchaseOrderPage() {
                     const { error } = await supabase.from('purchase_orders').update(orderData).eq('id', po.id)
                     if (error) throw error
                     orderId = po.id
-                    // Delete old items and re-insert
-                    await supabase.from('po_items').delete().eq('po_id', po.id)
+                    // A16: Smart delete — only remove items no longer in the list
+                    const { data: existingPoItems } = await supabase.from('po_items')
+                        .select('id, product_id').eq('po_id', po.id)
+                    const incomingProductIds = new Set(items.map(i => i.product_id))
+                    const toRemove = (existingPoItems || []).filter(e => !incomingProductIds.has(e.product_id))
+                    if (toRemove.length > 0) {
+                        await supabase.from('po_items').delete().in('id', toRemove.map(d => d.id))
+                    }
                 } else {
                     const code = await getNextCode()
                     const { data, error } = await supabase.from('purchase_orders').insert({
@@ -243,7 +249,7 @@ export default function PurchaseOrderPage() {
                     orderId = data.id
                 }
 
-                // Insert items
+                // Upsert items (insert new, update existing)
                 const itemsData = items.map(i => ({
                     po_id: orderId,
                     product_id: i.product_id,
@@ -256,8 +262,16 @@ export default function PurchaseOrderPage() {
                     line_total: parseInt(i.quantity) * (parseFloat(i.unit_price) || 0),
                 }))
 
-                const { error: itemsErr } = await supabase.from('po_items').insert(itemsData)
-                if (itemsErr) throw itemsErr
+                const { error: itemsErr } = await supabase.from('po_items').upsert(itemsData, {
+                    onConflict: 'po_id,product_id',
+                    ignoreDuplicates: false,
+                })
+                if (itemsErr) {
+                    // Fallback if no unique constraint
+                    if (isEdit) await supabase.from('po_items').delete().eq('po_id', orderId)
+                    const { error: fallbackErr } = await supabase.from('po_items').insert(itemsData)
+                    if (fallbackErr) throw fallbackErr
+                }
 
                 toast.success(isEdit ? 'Cập nhật PO thành công!' : 'Tạo PO thành công!')
                 onClose()

@@ -408,9 +408,12 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                     .eq('id', forecast.id)
                 if (updateErr) throw updateErr
 
-                // Delete old items then insert new ones
-                await supabase.from('sales_forecast_items').delete().eq('forecast_id', forecast.id)
+                // A16: Upsert pattern — preserve existing item IDs
+                // 1. Get existing items
+                const { data: existingItems } = await supabase.from('sales_forecast_items')
+                    .select('id, product_id, hospital_id').eq('forecast_id', forecast.id)
 
+                // 2. Build incoming items
                 const newItems = items.map(item => ({
                     forecast_id: forecast.id,
                     product_id: item.product_id,
@@ -419,8 +422,26 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                     needed_date: item.needed_date,
                     notes: item.notes,
                 }))
-                const { error: itemsErr } = await supabase.from('sales_forecast_items').insert(newItems)
-                if (itemsErr) throw itemsErr
+
+                // 3. Delete items no longer in the list
+                const incomingKeys = new Set(items.map(i => `${i.product_id}_${i.hospital_id}`))
+                const toDelete = (existingItems || []).filter(e => !incomingKeys.has(`${e.product_id}_${e.hospital_id}`))
+                if (toDelete.length > 0) {
+                    await supabase.from('sales_forecast_items')
+                        .delete().in('id', toDelete.map(d => d.id))
+                }
+
+                // 4. Upsert remaining items
+                const { error: itemsErr } = await supabase.from('sales_forecast_items').upsert(newItems, {
+                    onConflict: 'forecast_id,product_id,hospital_id',
+                    ignoreDuplicates: false,
+                })
+                if (itemsErr) {
+                    // Fallback: if no unique constraint exists, use delete+insert
+                    await supabase.from('sales_forecast_items').delete().eq('forecast_id', forecast.id)
+                    const { error: fallbackErr } = await supabase.from('sales_forecast_items').insert(newItems)
+                    if (fallbackErr) throw fallbackErr
+                }
 
                 toast.success('Cập nhật phiếu thành công')
             } else {
