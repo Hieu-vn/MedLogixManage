@@ -43,43 +43,63 @@ export const MODULE_ACCESS = {
     audit_trail: [ROLES.DIRECTOR, ROLES.ADMIN],
 }
 
+// Cache key for profile in sessionStorage
+const PROFILE_CACHE_KEY = 'medlogix-profile-cache'
+
+function getCachedProfile() {
+    try {
+        const cached = sessionStorage.getItem(PROFILE_CACHE_KEY)
+        if (!cached) return null
+        const { data, timestamp } = JSON.parse(cached)
+        // Cache valid for 5 minutes
+        if (Date.now() - timestamp > 5 * 60 * 1000) {
+            sessionStorage.removeItem(PROFILE_CACHE_KEY)
+            return null
+        }
+        return data
+    } catch {
+        return null
+    }
+}
+
+function setCachedProfile(data) {
+    try {
+        if (data) {
+            sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }))
+        } else {
+            sessionStorage.removeItem(PROFILE_CACHE_KEY)
+        }
+    } catch { /* sessionStorage may be unavailable */ }
+}
+
 export function AuthProvider({ children }) {
+    // Initialize profile from cache for instant display on page reload/navigation
     const [user, setUser] = useState(null)
-    const [profile, setProfile] = useState(null)
+    const [profile, setProfile] = useState(() => getCachedProfile())
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         let isMounted = true
-        let settled = false
 
-        // Timeout: if getSession hangs for >8s (auth lock deadlock), force clear and proceed
-        const timeout = setTimeout(() => {
-            if (!settled && isMounted) {
-                settled = true
-                console.warn('[Auth] Session check timed out — clearing stale session')
-                localStorage.removeItem('medlogix-auth')
-                setUser(null)
-                setProfile(null)
-                setLoading(false)
-            }
-        }, 8000)
-
-        // Get initial session
+        // Get initial session — with lock:false this should resolve quickly
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (settled || !isMounted) return
-            settled = true
-            clearTimeout(timeout)
+            if (!isMounted) return
             setUser(session?.user ?? null)
             if (session?.user) {
                 fetchProfile(session.user.id)
             } else {
+                setProfile(null)
+                setCachedProfile(null)
                 setLoading(false)
             }
         }).catch((err) => {
-            if (settled || !isMounted) return
-            settled = true
-            clearTimeout(timeout)
+            if (!isMounted) return
             console.error('[Auth] getSession error:', err)
+            // If we have a cached profile, keep using it instead of logging out
+            if (!getCachedProfile()) {
+                setProfile(null)
+                setCachedProfile(null)
+            }
             setLoading(false)
         })
 
@@ -92,6 +112,7 @@ export function AuthProvider({ children }) {
                     await fetchProfile(session.user.id)
                 } else {
                     setProfile(null)
+                    setCachedProfile(null)
                     setLoading(false)
                 }
             }
@@ -99,12 +120,11 @@ export function AuthProvider({ children }) {
 
         return () => {
             isMounted = false
-            clearTimeout(timeout)
             subscription.unsubscribe()
         }
     }, [])
 
-    async function fetchProfile(userId) {
+    async function fetchProfile(userId, retryCount = 0) {
         try {
             const { data, error } = await supabase
                 .from('profiles')
@@ -114,9 +134,22 @@ export function AuthProvider({ children }) {
 
             if (error) throw error
             setProfile(data)
+            setCachedProfile(data)
         } catch (error) {
-            console.error('Error fetching profile:', error)
-            setProfile(null)
+            console.error(`[Auth] Error fetching profile (attempt ${retryCount + 1}):`, error)
+            // Retry up to 2 times with delay
+            if (retryCount < 2) {
+                await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)))
+                return fetchProfile(userId, retryCount + 1)
+            }
+            // After retries, fall back to cache or null
+            const cached = getCachedProfile()
+            if (cached) {
+                console.log('[Auth] Using cached profile after fetch failure')
+                setProfile(cached)
+            } else {
+                setProfile(null)
+            }
         } finally {
             setLoading(false)
         }
@@ -135,6 +168,7 @@ export function AuthProvider({ children }) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error
         setProfile(null)
+        setCachedProfile(null)
     }
 
     function hasAccess(module) {

@@ -156,8 +156,8 @@ export default function Layout({ children }) {
                     </div>
                 </header>
 
-                {/* Content Area with page entry animation */}
-                <main className="content-area" key={location.pathname}>
+                {/* Content Area */}
+                <main className="content-area">
                     {children}
                 </main>
             </div>

@@ -23,7 +23,7 @@ export function useProducts(options = {}) {
             if (error) throw error
             return data || []
         },
-        staleTime: 60 * 1000, // Products rarely change, cache 1 min
+        staleTime: 5 * 60 * 1000, // Products rarely change, cache 5 min
         ...options,
     })
 }
@@ -41,7 +41,7 @@ export function useHospitals(options = {}) {
             if (error) throw error
             return data || []
         },
-        staleTime: 60 * 1000,
+        staleTime: 5 * 60 * 1000, // Hospitals rarely change, cache 5 min
         ...options,
     })
 }
@@ -59,7 +59,7 @@ export function useSuppliers(options = {}) {
             if (error) throw error
             return data || []
         },
-        staleTime: 60 * 1000,
+        staleTime: 5 * 60 * 1000, // Suppliers rarely change, cache 5 min
         ...options,
     })
 }
@@ -148,7 +148,7 @@ export function useDashboardData(options = {}) {
                 warehouseReceipts: warehouseReceipts || [],
             }
         },
-        staleTime: 15 * 1000, // Dashboard: 15s freshness
+        staleTime: 60 * 1000, // Dashboard: 60s freshness
         ...options,
     })
 }

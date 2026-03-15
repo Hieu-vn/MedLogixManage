@@ -12,12 +12,16 @@ export default function NotificationBell() {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(true)
 
+    // Fetch once on mount
+    useEffect(() => { fetchNotifications() }, [])
+
+    // Poll only while dropdown is open
     useEffect(() => {
+        if (!open) return
         fetchNotifications()
-        // A8: Refresh every 120s (was 60s) to reduce backend load
         const interval = setInterval(fetchNotifications, 120000)
         return () => clearInterval(interval)
-    }, [])
+    }, [open])
 
     async function fetchNotifications() {
         try {

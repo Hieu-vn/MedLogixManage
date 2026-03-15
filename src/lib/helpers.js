@@ -1,13 +1,38 @@
 /**
+ * Cached Intl formatters (singleton pattern — created once, reused forever)
+ */
+const currencyFormatters = {}
+function getCurrencyFormatter(currency) {
+    if (!currencyFormatters[currency]) {
+        currencyFormatters[currency] = new Intl.NumberFormat('vi-VN', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: currency === 'VND' ? 0 : 2,
+        })
+    }
+    return currencyFormatters[currency]
+}
+
+const dateFormatter = new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+})
+
+const dateTimeFormatter = new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+})
+
+/**
  * Format number as Vietnamese currency (VND)
  */
 export function formatCurrency(amount, currency = 'VND') {
     if (amount == null) return '—'
-    return new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: currency === 'VND' ? 0 : 2,
-    }).format(amount)
+    return getCurrencyFormatter(currency).format(amount)
 }
 
 /**
@@ -15,11 +40,7 @@ export function formatCurrency(amount, currency = 'VND') {
  */
 export function formatDate(dateStr) {
     if (!dateStr) return '—'
-    return new Intl.DateTimeFormat('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-    }).format(new Date(dateStr))
+    return dateFormatter.format(new Date(dateStr))
 }
 
 /**
@@ -27,13 +48,7 @@ export function formatDate(dateStr) {
  */
 export function formatDateTime(dateStr) {
     if (!dateStr) return '—'
-    return new Intl.DateTimeFormat('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    }).format(new Date(dateStr))
+    return dateTimeFormatter.format(new Date(dateStr))
 }
 
 /**

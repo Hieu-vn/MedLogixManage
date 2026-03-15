@@ -96,7 +96,7 @@
     border-radius: var(--radius-md);
     font-size: var(--font-sm);
     font-weight: 500;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast);
     cursor: pointer;
     text-decoration: none;
     position: relative;
@@ -254,7 +254,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .theme-toggle:hover {
@@ -558,7 +558,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     outline: none;
-    transition: all 0.2s ease;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .login-input::placeholder {
@@ -588,7 +588,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 6px;
-    transition: all 0.15s;
+    transition: color 0.15s, background 0.15s;
 }
 
 .login-eye-btn:hover {
@@ -646,7 +646,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     box-shadow: 0 4px 16px rgba(108, 92, 231, 0.3);
     margin-top: 4px;
     position: relative;
@@ -748,7 +748,7 @@
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 10px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     text-align: left;
     font-family: var(--font-family);
 }
@@ -825,7 +825,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
     flex-shrink: 0;
 }
 
@@ -911,7 +911,7 @@
     align-items: center;
     gap: 14px;
     border: 1px solid var(--border-secondary);
-    transition: all 0.25s ease;
+    transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
     position: relative;
     overflow: hidden;
 }
@@ -998,7 +998,7 @@
    Pipeline Step Hover
    ======================================== */
 .dashboard-pipeline-step {
-    transition: all 0.25s ease !important;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease !important;
 }
 
 .dashboard-pipeline-step:hover {
@@ -1011,7 +1011,7 @@
    Page Entry Animation
    ======================================== */
 .content-area {
-    animation: pageEntry 0.35s ease-out;
+    animation: pageEntry 0.2s ease-out;
 }
 
 @keyframes pageEntry {
