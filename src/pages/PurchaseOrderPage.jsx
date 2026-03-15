@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -14,6 +15,7 @@ import {
     Filter, Calendar
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
+import { usePurchaseOrders, usePOMasterData } from '../hooks/useSupabaseQuery'
 import POTimeline, { getOverdueBadge } from '../components/POTimeline'
 
 const PO_STATUS_CONFIG = {
@@ -39,10 +41,9 @@ const STATUS_FILTERS = [
 export default function PurchaseOrderPage() {
     const { profile, isRole } = useAuth()
     const toast = useToast()
+    const queryClient = useQueryClient()
 
     // State
-    const [orders, setOrders] = useState([])
-    const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState('all')
     const [search, setSearch] = useState('')
     const [supplierFilter, setSupplierFilter] = useState('')
@@ -52,35 +53,12 @@ export default function PurchaseOrderPage() {
     const [showView, setShowView] = useState(null)
     const [showEdit, setShowEdit] = useState(null)
 
-    // Master data
-    const [suppliers, setSuppliers] = useState([])
-    const [products, setProducts] = useState([])
-    const [priceList, setPriceList] = useState([])
-
-    useEffect(() => { fetchAll() }, [])
-
-    async function fetchAll() {
-        setLoading(true)
-        try {
-            const [ordersRes, suppRes, prodRes, plRes] = await Promise.all([
-                supabase.from('purchase_orders').select(`
-          *, supplier:suppliers(name),
-          created_by_profile:profiles!purchase_orders_created_by_fkey(full_name),
-          approved_by_profile:profiles!purchase_orders_approved_by_fkey(full_name),
-          po_items(*, product:products(code, name, unit))
-        `).order('created_at', { ascending: false }),
-                supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
-                supabase.from('products').select('*').eq('is_active', true).order('code'),
-                supabase.from('price_list').select('*, product:products(code, name), supplier:suppliers(name)').eq('is_current', true),
-            ])
-            if (ordersRes.data) setOrders(ordersRes.data)
-            if (suppRes.data) setSuppliers(suppRes.data)
-            if (prodRes.data) setProducts(prodRes.data)
-            if (plRes.data) setPriceList(plRes.data)
-        } catch (err) {
-            toast.error('Lỗi tải dữ liệu: ' + err.message)
-        } finally { setLoading(false) }
-    }
+    // React Query: cached data
+    const { data: orders = [], isLoading: loading, refetch: fetchAll } = usePurchaseOrders()
+    const { data: masterData } = usePOMasterData()
+    const suppliers = masterData?.suppliers || []
+    const products = masterData?.products || []
+    const priceList = masterData?.priceList || []
 
     // Filtered orders
     const filteredOrders = useMemo(() => {

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -7,6 +8,7 @@ import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
+import { usePurchaseForecasts } from '../hooks/useSupabaseQuery'
 import { generateCode, formatDate, formatCurrency, getExpiryWarning, calculatePriority, STORAGE_CONDITIONS, monthsBetween } from '../lib/helpers'
 import {
     Plus, Eye, Send, ClipboardList, CheckCircle, XCircle,
@@ -17,8 +19,7 @@ export default function PurchaseForecastPage() {
     const { profile } = useAuth()
     const toast = useToast()
     const navigate = useNavigate()
-    const [forecasts, setForecasts] = useState([])
-    const [loading, setLoading] = useState(true)
+    const queryClient = useQueryClient()
     const [createModalOpen, setCreateModalOpen] = useState(false)
     const [viewModalOpen, setViewModalOpen] = useState(false)
     const [viewingForecast, setViewingForecast] = useState(null)
@@ -26,33 +27,8 @@ export default function PurchaseForecastPage() {
 
     const isLogistics = ['logistics_manager', 'admin'].includes(profile?.role)
 
-    useEffect(() => { fetchForecasts() }, [])
-
-    async function fetchForecasts() {
-        setLoading(true)
-        try {
-            const { data, error } = await supabase
-                .from('purchase_forecasts')
-                .select(`
-          *,
-          creator:created_by(full_name),
-          approver:approved_by(full_name),
-          purchase_forecast_items(
-            id, total_requested, current_stock, qty_to_purchase, approved_qty,
-            priority, earliest_needed_date, notes,
-            product:product_id(id, code, name, unit, storage_condition),
-            supplier:supplier_id(id, name)
-          )
-        `)
-                .order('created_at', { ascending: false })
-            if (error) throw error
-            setForecasts(data || [])
-        } catch (err) {
-            toast.error('Lỗi tải dự trù mua hàng: ' + err.message)
-        } finally {
-            setLoading(false)
-        }
-    }
+    // React Query: cached forecast list
+    const { data: forecasts = [], isLoading: loading, refetch: fetchForecasts } = usePurchaseForecasts()
 
     function handleView(f) { setViewingForecast(f); setViewModalOpen(true) }
 
@@ -81,13 +57,13 @@ export default function PurchaseForecastPage() {
                 return
             }
 
-            // Update items: set approved_qty = qty_to_purchase
-            for (const item of items) {
-                await supabase
+            // Batch update items: set approved_qty = qty_to_purchase (parallel instead of sequential)
+            await Promise.all(items.map(item =>
+                supabase
                     .from('purchase_forecast_items')
                     .update({ approved_qty: item.qty_to_purchase })
                     .eq('id', item.id)
-            }
+            ))
 
             // Mark forecast as approved
             const { error } = await supabase

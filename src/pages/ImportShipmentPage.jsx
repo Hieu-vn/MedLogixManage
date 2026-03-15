@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -10,6 +10,7 @@ import {
 import { formatDate, formatCurrency } from '../lib/helpers'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
+import { useImportShipments } from '../hooks/useSupabaseQuery'
 
 const STATUS_CONFIG = {
     in_transit: { label: 'Đang vận chuyển', color: '#0984E3', icon: '🚢' },
@@ -36,30 +37,13 @@ const STATUS_STEPS = ['in_transit', 'arrived', 'declaring', 'cleared', 'transpor
 export default function ImportShipmentPage() {
     const { profile, isRole } = useAuth()
     const toast = useToast()
-    const [shipments, setShipments] = useState([])
-    const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showView, setShowView] = useState(null)
-    const [pos, setPos] = useState([])
 
-    useEffect(() => { fetchAll() }, [])
-
-    async function fetchAll() {
-        setLoading(true)
-        try {
-            const [shRes, poRes] = await Promise.all([
-                supabase.from('import_shipments').select(`
-          *, po:purchase_orders(code, supplier:suppliers(name)),
-          import_documents(*)
-        `).order('created_at', { ascending: false }),
-                supabase.from('purchase_orders').select('id, code, supplier:suppliers(name)')
-                    .in('status', ['sent', 'confirmed']),
-            ])
-            if (shRes.data) setShipments(shRes.data)
-            if (poRes.data) setPos(poRes.data)
-        } catch (err) { toast.error('Lỗi: ' + err.message) }
-        finally { setLoading(false) }
-    }
+    // React Query: cached shipment data
+    const { data: shipmentData, isLoading: loading, refetch: fetchAll } = useImportShipments()
+    const shipments = shipmentData?.shipments || []
+    const pos = shipmentData?.availablePOs || []
 
     // ========== Timeline Component ==========
     function StatusTimeline({ currentStatus }) {

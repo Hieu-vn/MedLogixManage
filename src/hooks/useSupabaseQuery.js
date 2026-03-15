@@ -172,3 +172,140 @@ export function useInventoryLots(options = {}) {
         ...options,
     })
 }
+
+// ========================
+// Purchase Forecast Hooks
+// ========================
+
+/** All purchase forecasts with items */
+export function usePurchaseForecasts(options = {}) {
+    return useQuery({
+        queryKey: ['purchase_forecasts'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('purchase_forecasts')
+                .select(`
+                    *,
+                    creator:created_by(full_name),
+                    approver:approved_by(full_name),
+                    purchase_forecast_items(
+                        id, total_requested, current_stock, qty_to_purchase, approved_qty,
+                        priority, earliest_needed_date, notes,
+                        product:product_id(id, code, name, unit, storage_condition),
+                        supplier:supplier_id(id, name)
+                    )
+                `)
+                .order('created_at', { ascending: false })
+            if (error) throw error
+            return data || []
+        },
+        staleTime: 15 * 1000,
+        ...options,
+    })
+}
+
+// ========================
+// Purchase Order Hooks
+// ========================
+
+/** All purchase orders with items + relations */
+export function usePurchaseOrders(options = {}) {
+    return useQuery({
+        queryKey: ['purchase_orders'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('purchase_orders')
+                .select(`
+                    *, supplier:suppliers(name),
+                    created_by_profile:profiles!purchase_orders_created_by_fkey(full_name),
+                    approved_by_profile:profiles!purchase_orders_approved_by_fkey(full_name),
+                    po_items(*, product:products(code, name, unit))
+                `)
+                .order('created_at', { ascending: false })
+            if (error) throw error
+            return data || []
+        },
+        staleTime: 15 * 1000,
+        ...options,
+    })
+}
+
+/** PO master data: suppliers, products, active price list */
+export function usePOMasterData(options = {}) {
+    return useQuery({
+        queryKey: ['po_master_data'],
+        queryFn: async () => {
+            const [suppRes, prodRes, plRes] = await Promise.all([
+                supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
+                supabase.from('products').select('*').eq('is_active', true).order('code'),
+                supabase.from('price_list').select('*, product:products(code, name), supplier:suppliers(name)').eq('is_current', true),
+            ])
+            return {
+                suppliers: suppRes.data || [],
+                products: prodRes.data || [],
+                priceList: plRes.data || [],
+            }
+        },
+        staleTime: 5 * 60 * 1000, // Master data: cache 5 min
+        ...options,
+    })
+}
+
+// ========================
+// Import Shipment Hooks
+// ========================
+
+/** All import shipments with docs + PO refs */
+export function useImportShipments(options = {}) {
+    return useQuery({
+        queryKey: ['import_shipments'],
+        queryFn: async () => {
+            const [shRes, poRes] = await Promise.all([
+                supabase.from('import_shipments').select(`
+                    *, po:purchase_orders(code, supplier:suppliers(name)),
+                    import_documents(*)
+                `).order('created_at', { ascending: false }),
+                supabase.from('purchase_orders').select('id, code, supplier:suppliers(name)')
+                    .in('status', ['sent', 'confirmed']),
+            ])
+            return {
+                shipments: shRes.data || [],
+                availablePOs: poRes.data || [],
+            }
+        },
+        staleTime: 15 * 1000,
+        ...options,
+    })
+}
+
+// ========================
+// Warehouse Receipt Hooks
+// ========================
+
+/** All warehouse receipts with items + source refs */
+export function useWarehouseReceipts(options = {}) {
+    return useQuery({
+        queryKey: ['warehouse_receipts'],
+        queryFn: async () => {
+            const [rcRes, shRes, poRes] = await Promise.all([
+                supabase.from('warehouse_receipts').select(`
+                    *, import_shipment:import_shipments(code, po:purchase_orders(code, supplier:suppliers(name))),
+                    po_direct:purchase_orders(code, supplier:suppliers(name)),
+                    received_by_profile:profiles!warehouse_receipts_received_by_fkey(full_name),
+                    receipt_items(*, product:products(code, name, unit, storage_condition))
+                `).order('created_at', { ascending: false }),
+                supabase.from('import_shipments').select('id, code, po_id, po:purchase_orders(code, supplier:suppliers(name))')
+                    .eq('status', 'completed'),
+                supabase.from('purchase_orders').select('id, code, is_domestic, supplier:suppliers(name), po_items(*, product:products(code, name, unit))')
+                    .in('status', ['sent', 'confirmed', 'delivering', 'received']),
+            ])
+            return {
+                receipts: rcRes.data || [],
+                completedShipments: shRes.data || [],
+                availablePOs: poRes.data || [],
+            }
+        },
+        staleTime: 15 * 1000,
+        ...options,
+    })
+}

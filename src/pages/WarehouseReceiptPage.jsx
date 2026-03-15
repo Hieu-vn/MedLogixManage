@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -10,6 +10,7 @@ import {
     Warehouse, CheckCircle, XCircle, FileText, ArrowDown, ShieldAlert
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
+import { useWarehouseReceipts } from '../hooks/useSupabaseQuery'
 
 const STATUS_CONFIG = {
     pending: { label: 'Chờ kiểm tra', color: '#FDCB6E' },
@@ -22,38 +23,14 @@ const STATUS_CONFIG = {
 export default function WarehouseReceiptPage() {
     const { profile, isRole } = useAuth()
     const toast = useToast()
-    const [receipts, setReceipts] = useState([])
-    const [loading, setLoading] = useState(true)
     const [showCreate, setShowCreate] = useState(false)
     const [showView, setShowView] = useState(null)
 
-    // Source data for creating
-    const [shipments, setShipments] = useState([])
-    const [pos, setPos] = useState([])
-
-    useEffect(() => { fetchAll() }, [])
-
-    async function fetchAll() {
-        setLoading(true)
-        try {
-            const [rcRes, shRes, poRes] = await Promise.all([
-                supabase.from('warehouse_receipts').select(`
-          *, import_shipment:import_shipments(code, po:purchase_orders(code, supplier:suppliers(name))),
-          po_direct:purchase_orders(code, supplier:suppliers(name)),
-          received_by_profile:profiles!warehouse_receipts_received_by_fkey(full_name),
-          receipt_items(*, product:products(code, name, unit, storage_condition))
-        `).order('created_at', { ascending: false }),
-                supabase.from('import_shipments').select('id, code, po_id, po:purchase_orders(code, supplier:suppliers(name))')
-                    .eq('status', 'completed'),
-                supabase.from('purchase_orders').select('id, code, is_domestic, supplier:suppliers(name), po_items(*, product:products(code, name, unit))')
-                    .in('status', ['sent', 'confirmed', 'delivering', 'received']),
-            ])
-            if (rcRes.data) setReceipts(rcRes.data)
-            if (shRes.data) setShipments(shRes.data)
-            if (poRes.data) setPos(poRes.data)
-        } catch (err) { toast.error('Lỗi: ' + err.message) }
-        finally { setLoading(false) }
-    }
+    // React Query: cached receipt data
+    const { data: receiptData, isLoading: loading, refetch: fetchAll } = useWarehouseReceipts()
+    const receipts = receiptData?.receipts || []
+    const shipments = receiptData?.completedShipments || []
+    const pos = receiptData?.availablePOs || []
 
     // ========== CREATE RECEIPT ==========
     function CreateModal({ onClose }) {
