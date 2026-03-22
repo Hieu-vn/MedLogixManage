@@ -650,6 +650,9 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                             <tr>
                                 <th style={{ width: '40px' }}>#</th>
                                 <th>Sản phẩm</th>
+                                <th style={{ width: '100px' }}>Hãng SX</th>
+                                <th style={{ width: '100px' }}>Quy cách ĐG</th>
+                                <th style={{ width: '60px' }}>ĐVT</th>
                                 <th>Bệnh viện</th>
                                 <th style={{ width: '90px' }}>Số lượng</th>
                                 <th style={{ width: '140px' }}>Ngày cần hàng</th>
@@ -676,6 +679,15 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                                                 ))}
                                             </select>
                                             {isDuplicate && <div style={{ color: 'var(--red-400)', fontSize: '0.625rem', marginTop: '2px' }}>⚠ Trùng SP + BV</div>}
+                                        </td>
+                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                                            {products.find(p => p.id === item.product_id)?.manufacturer || '—'}
+                                        </td>
+                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                                            {products.find(p => p.id === item.product_id)?.packaging || '—'}
+                                        </td>
+                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                                            {products.find(p => p.id === item.product_id)?.unit || '—'}
                                         </td>
                                         <td>
                                             <select
@@ -892,6 +904,9 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                         <tr>
                             <th style={{ width: '40px' }}>#</th>
                             <th>Sản phẩm</th>
+                            <th>Hãng SX</th>
+                            <th>Quy cách ĐG</th>
+                            <th style={{ width: '60px' }}>ĐVT</th>
                             <th>Bệnh viện</th>
                             <th style={{ width: '80px' }}>SL</th>
                             <th style={{ width: '120px' }}>Ngày cần</th>
@@ -904,8 +919,11 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                                 <td style={{ color: 'var(--text-tertiary)' }}>{i + 1}</td>
                                 <td>
                                     <div style={{ fontWeight: 500 }}>{item.product?.name || '—'}</div>
-                                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>{item.product?.code} • {item.product?.unit}</div>
+                                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>{item.product?.code}</div>
                                 </td>
+                                <td style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>{item.product?.manufacturer || '—'}</td>
+                                <td style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>{item.product?.packaging || '—'}</td>
+                                <td style={{ fontSize: 'var(--font-sm)' }}>{item.product?.unit || '—'}</td>
                                 <td>{item.hospital?.name || '—'}</td>
                                 <td style={{ fontWeight: 600, textAlign: 'center' }}>{item.quantity}</td>
                                 <td>{formatDate(item.needed_date)}</td>

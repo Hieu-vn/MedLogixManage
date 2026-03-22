@@ -17,7 +17,7 @@ export function useProducts(options = {}) {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from('products')
-                .select('id, code, name, unit, category, storage_condition, safety_stock_qty, is_active')
+                .select('id, code, name, unit, category, manufacturer, packaging, storage_condition, safety_stock_qty, is_active')
                 .eq('is_active', true)
                 .order('code')
             if (error) throw error
@@ -81,7 +81,7 @@ export function useSalesForecasts(statusFilter, options = {}) {
                     approver:approved_by(full_name),
                     sales_forecast_items(
                         id, product_id, hospital_id, quantity, needed_date, notes,
-                        product:product_id(id, code, name, unit),
+                        product:product_id(id, code, name, unit, manufacturer, packaging),
                         hospital:hospital_id(id, name)
                     )
                 `)
@@ -169,6 +169,88 @@ export function useInventoryLots(options = {}) {
             if (error) throw error
             return data || []
         },
+        ...options,
+    })
+}
+
+/** Inventory data with full product info for InventoryPage */
+export function useInventoryData(options = {}) {
+    return useQuery({
+        queryKey: ['inventory_data'],
+        queryFn: async () => {
+            const [lotsRes, productsRes] = await Promise.all([
+                supabase.from('inventory_lots')
+                    .select('*, product:products(id, code, name, unit, manufacturer, packaging, storage_condition, safety_stock_qty, category)')
+                    .order('expiry_date', { ascending: true }),
+                supabase.from('products').select('id, code, name, safety_stock_qty').eq('is_active', true),
+            ])
+            return {
+                lots: lotsRes.data || [],
+                products: productsRes.data || [],
+            }
+        },
+        staleTime: 15 * 1000,
+        ...options,
+    })
+}
+
+/** Inventory movements: receipts + exports for period-based report */
+export function useInventoryMovements(startDate, endDate, options = {}) {
+    return useQuery({
+        queryKey: ['inventory_movements', startDate, endDate],
+        queryFn: async () => {
+            const [receiptsRes, exportsRes] = await Promise.all([
+                supabase.from('receipt_items')
+                    .select(`
+                        id, product_id, lot_number, quantity, expiry_date, created_at,
+                        product:products(id, code, name, unit, category, manufacturer),
+                        receipt:warehouse_receipts!inner(id, code, received_date, status)
+                    `)
+                    .gte('receipt.received_date', startDate)
+                    .lte('receipt.received_date', endDate)
+                    .eq('receipt.status', 'completed'),
+                supabase.from('stock_export_items')
+                    .select(`
+                        id, product_id, lot_number, quantity, expiry_date, created_at,
+                        product:products(id, code, name, unit, category, manufacturer),
+                        export:stock_exports!inner(id, code, export_date, status)
+                    `)
+                    .gte('export.export_date', startDate)
+                    .lte('export.export_date', endDate)
+                    .eq('export.status', 'completed'),
+            ])
+            return {
+                receiptItems: receiptsRes.data || [],
+                exportItems: exportsRes.data || [],
+            }
+        },
+        enabled: !!startDate && !!endDate,
+        staleTime: 30 * 1000,
+        ...options,
+    })
+}
+
+/** Stock exports with items, hospital, requester */
+export function useStockExports(options = {}) {
+    return useQuery({
+        queryKey: ['stock_exports'],
+        queryFn: async () => {
+            const [exRes, hospRes] = await Promise.all([
+                supabase.from('stock_exports').select(`
+                    *,
+                    hospital:hospitals(id, name),
+                    requested_by_profile:profiles!stock_exports_requested_by_fkey(full_name),
+                    approved_by_profile:profiles!stock_exports_approved_by_fkey(full_name),
+                    stock_export_items(*, product:products(id, code, name, unit, manufacturer, storage_condition))
+                `).order('created_at', { ascending: false }),
+                supabase.from('hospitals').select('id, name').eq('is_active', true).order('name'),
+            ])
+            return {
+                exports: exRes.data || [],
+                hospitals: hospRes.data || [],
+            }
+        },
+        staleTime: 15 * 1000,
         ...options,
     })
 }

@@ -20,6 +20,8 @@ const WarehouseReceiptPage = lazy(() => import('./pages/WarehouseReceiptPage'))
 const AuditTrailPage = lazy(() => import('./pages/AuditTrailPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const DeliveryPage = lazy(() => import('./pages/DeliveryPage'))
+const InventoryPage = lazy(() => import('./pages/InventoryPage'))
+const StockExportPage = lazy(() => import('./pages/StockExportPage'))
 
 function PageLoader() {
     return (
@@ -83,6 +85,12 @@ export default function App() {
                                             } />
                                             <Route path="/warehouse" element={
                                                 <RoleGuard module="warehouse"><WarehouseReceiptPage /></RoleGuard>
+                                            } />
+                                            <Route path="/inventory" element={
+                                                <RoleGuard module="inventory"><InventoryPage /></RoleGuard>
+                                            } />
+                                            <Route path="/stock-exports" element={
+                                                <RoleGuard module="stock_export"><StockExportPage /></RoleGuard>
                                             } />
                                             <Route path="/delivery" element={
                                                 <RoleGuard module="delivery"><DeliveryPage /></RoleGuard>

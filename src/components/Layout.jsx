@@ -4,7 +4,8 @@ import { useAuth, ROLE_LABELS, ROLE_COLORS } from '../lib/auth'
 import {
     LayoutDashboard, FileText, ClipboardList, ShoppingCart,
     Ship, Warehouse, Truck, Database, LogOut,
-    Sun, Moon, ChevronRight, ChevronLeft, Shield, PanelLeftClose, PanelLeftOpen
+    Sun, Moon, ChevronRight, ChevronLeft, Shield, PanelLeftClose, PanelLeftOpen,
+    PackageOpen, LogOut as LogOutIcon
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -23,6 +24,8 @@ const NAV_ITEMS = [
             { path: '/purchase-orders', label: 'Đặt hàng', icon: ShoppingCart, module: 'purchase_order' },
             { path: '/import-shipments', label: 'Nhập khẩu', icon: Ship, module: 'import_shipment' },
             { path: '/warehouse', label: 'Nhập kho', icon: Warehouse, module: 'warehouse' },
+            { path: '/inventory', label: 'Quản lý kho', icon: PackageOpen, module: 'inventory' },
+            { path: '/stock-exports', label: 'Xuất kho', icon: LogOutIcon, module: 'stock_export' },
             { path: '/delivery', label: 'Vận chuyển', icon: Truck, module: 'delivery' },
         ]
     },
@@ -42,6 +45,8 @@ const PAGE_TITLES = {
     '/purchase-orders': 'Đặt hàng',
     '/import-shipments': 'Nhập khẩu',
     '/warehouse': 'Nhập kho',
+    '/inventory': 'Quản lý kho',
+    '/stock-exports': 'Xuất kho',
     '/delivery': 'Vận chuyển & Giao hàng',
     '/master-data': 'Danh mục dữ liệu',
     '/audit-trail': 'Audit Trail',
