@@ -12,8 +12,9 @@ import { usePurchaseForecasts } from '../hooks/useSupabaseQuery'
 import { generateCode, formatDate, formatCurrency, getExpiryWarning, calculatePriority, STORAGE_CONDITIONS, monthsBetween } from '../lib/helpers'
 import {
     Plus, Eye, Send, ClipboardList, CheckCircle, XCircle,
-    AlertTriangle, Package, ArrowRight, Zap
+    AlertTriangle, Package, ArrowRight, Zap, Download
 } from 'lucide-react'
+import { useExport } from '../hooks/useExport'
 
 export default function PurchaseForecastPage() {
     const { profile } = useAuth()
@@ -26,10 +27,19 @@ export default function PurchaseForecastPage() {
     const [statusFilter, setStatusFilter] = useState('all')
 
     const isLogistics = ['logistics_manager', 'admin'].includes(profile?.role)
+    const { exportExcel, exportPDF } = useExport()
 
     // React Query: cached forecast list
     const { data: forecasts = [], isLoading: loading, refetch: fetchForecasts } = usePurchaseForecasts()
 
+    // Export columns
+    const exportColumns = [
+        { key: 'code', label: 'Mã phiếu' },
+        { key: 'consolidation_date', label: 'Ngày TH', exportRender: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
+        { key: 'creator', label: 'Người tạo', exportRender: v => v?.full_name || '—' },
+        { key: 'items_count', label: 'Số SP', exportRender: (_, r) => r.purchase_forecast_items?.length || 0 },
+        { key: 'status', label: 'Trạng thái' },
+    ]
     function handleView(f) { setViewingForecast(f); setViewModalOpen(true) }
 
     async function handleSubmit(f) {
@@ -206,11 +216,21 @@ export default function PurchaseForecastPage() {
                 title="Dự trù mua hàng"
                 subtitle="Tổng hợp nhu cầu từ phiếu dự trù Sales đã duyệt"
                 icon={<ClipboardList size={20} />}
-                actions={isLogistics && (
-                    <button className="btn btn-primary" onClick={() => setCreateModalOpen(true)}>
-                        <Plus size={16} /> Tạo phiếu tổng hợp
-                    </button>
-                )}
+                actions={
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        {isLogistics && (
+                            <button className="btn btn-primary" onClick={() => setCreateModalOpen(true)}>
+                                <Plus size={16} /> Tạo phiếu tổng hợp
+                            </button>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => exportExcel(exportColumns, filtered, 'du_tru_mua', 'Dự Trù Mua')}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(exportColumns, filtered, 'Danh sách Dự Trù Mua Hàng', 'du_tru_mua')}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                }
             />
 
             {/* Stat Cards */}

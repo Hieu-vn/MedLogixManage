@@ -146,7 +146,20 @@ export default function SalesForecastPage() {
 
     const filteredForecasts = statusFilter === 'all'
         ? forecasts
+        : statusFilter === 'stale'
+        ? forecasts.filter(f => {
+            if (f.status !== 'pending') return false
+            const days = Math.floor((Date.now() - new Date(f.updated_at || f.created_at).getTime()) / (1000 * 60 * 60 * 24))
+            return days > 3
+        })
         : forecasts.filter(f => f.status === statusFilter)
+
+    // Stale PR helper: pending > 3 days
+    function getStaleDays(forecast) {
+        if (forecast.status !== 'pending') return 0
+        return Math.floor((Date.now() - new Date(forecast.updated_at || forecast.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    }
+    const staleCount = forecasts.filter(f => getStaleDays(f) > 3).length
 
     const columns = [
         {
@@ -184,8 +197,25 @@ export default function SalesForecastPage() {
             ),
         },
         {
-            key: 'status', label: 'Trạng thái', width: '120px',
-            render: (v) => <StatusBadge status={v} />,
+            key: 'status', label: 'Trạng thái', width: '160px',
+            render: (v, row) => {
+                const staleDays = getStaleDays(row)
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <StatusBadge status={v} />
+                        {staleDays > 3 && (
+                            <span style={{
+                                fontSize: '0.625rem', fontWeight: 700,
+                                color: '#fff', background: '#D63031',
+                                padding: '1px 6px', borderRadius: 'var(--radius-full)',
+                                whiteSpace: 'nowrap', animation: 'pulse 2s infinite',
+                            }}>
+                                🕐 {staleDays}d
+                            </span>
+                        )}
+                    </div>
+                )
+            },
         },
         {
             key: 'actions', label: '', width: '140px',
@@ -258,6 +288,7 @@ export default function SalesForecastPage() {
                     { label: 'Chờ duyệt', value: forecasts.filter(f => f.status === 'pending').length, color: '#FDCB6E', icon: <Clock size={18} /> },
                     { label: 'Đã duyệt', value: forecasts.filter(f => f.status === 'approved').length, color: '#00B894', icon: <CheckCircle size={18} /> },
                     { label: 'Từ chối', value: forecasts.filter(f => f.status === 'rejected').length, color: '#E17055', icon: <XCircle size={18} /> },
+                    { label: '⚠️ PR Treo', value: staleCount, color: '#D63031', icon: <AlertTriangle size={18} /> },
                 ].map(s => (
                     <div key={s.label} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{
@@ -279,6 +310,7 @@ export default function SalesForecastPage() {
                     { key: 'all', label: 'Tất cả', count: forecasts.length },
                     { key: 'draft', label: '📝 Nháp', count: forecasts.filter(f => f.status === 'draft').length },
                     { key: 'pending', label: '⏳ Chờ duyệt', count: forecasts.filter(f => f.status === 'pending').length },
+                    { key: 'stale', label: '🔴 PR Treo >3d', count: staleCount },
                     { key: 'approved', label: '✅ Đã duyệt', count: forecasts.filter(f => f.status === 'approved').length },
                     { key: 'rejected', label: '❌ Từ chối', count: forecasts.filter(f => f.status === 'rejected').length },
                 ].map(chip => (

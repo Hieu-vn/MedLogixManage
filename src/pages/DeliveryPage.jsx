@@ -7,10 +7,11 @@ import DataTable from '../components/DataTable'
 import PageHeader from '../components/PageHeader'
 import {
     Truck, Plus, Eye, MapPin, Star, Upload, AlertTriangle,
-    CheckCircle, Clock, Package, Thermometer, Phone
+    CheckCircle, Clock, Package, Thermometer, Phone, Download
 } from 'lucide-react'
 import { formatDate, formatCurrency, generateCode, daysBetween, STORAGE_CONDITIONS } from '../lib/helpers'
 import { useDeliveries } from '../hooks/useSupabaseQuery'
+import { useExport } from '../hooks/useExport'
 
 // ========== Constants ==========
 const DELIVERY_STATUS = {
@@ -53,6 +54,17 @@ export default function DeliveryPage() {
     const completedReceipts = deliveryData?.completedReceipts || []
     const hospitals = deliveryData?.hospitals || []
     const carriers = deliveryData?.carriers || []
+    const { exportExcel, exportPDF } = useExport()
+
+    // Export columns
+    const exportColumns = [
+        { key: 'code', label: 'Mã đơn' },
+        { key: 'hospital', label: 'Bệnh viện', exportRender: (_, r) => r.hospital?.name || '—' },
+        { key: 'carrier', label: 'NVC', exportRender: (_, r) => r.carrier?.name || '—' },
+        { key: 'expected_date', label: 'Ngày dự kiến', exportRender: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
+        { key: 'items_count', label: 'Số SP', exportRender: (_, r) => r.delivery_items?.length || 0 },
+        { key: 'status', label: 'Trạng thái', exportRender: v => DELIVERY_STATUS[v]?.label || v },
+    ]
 
     // Filter
     const filteredDeliveries = useMemo(() => {
@@ -737,11 +749,21 @@ export default function DeliveryPage() {
                 title="Vận chuyển & Giao hàng"
                 subtitle="Quản lý đơn giao, theo dõi trạng thái, chấm điểm NVC"
                 icon={<Truck size={20} />}
-                actions={isRole(ROLES.LOGISTICS_MANAGER, ROLES.WAREHOUSE_KEEPER, ROLES.ADMIN) && (
-                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                        <Plus size={16} /> Tạo đơn giao
-                    </button>
-                )}
+                actions={
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        {isRole(ROLES.LOGISTICS_MANAGER, ROLES.WAREHOUSE_KEEPER, ROLES.ADMIN) && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                                <Plus size={16} /> Tạo đơn giao
+                            </button>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => exportExcel(exportColumns, filteredDeliveries, 'giao_hang', 'Giao Hàng')}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(exportColumns, filteredDeliveries, 'Danh sách Đơn Giao Hàng', 'giao_hang')}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                }
             />
 
             {/* Stats cards */}

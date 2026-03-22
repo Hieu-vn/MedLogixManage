@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import PageHeader from '../components/PageHeader'
-import { Shield, Search, Filter, Clock, Plus, Edit2, Trash2, Eye, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { Shield, Search, Filter, Clock, Plus, Edit2, Trash2, Eye, ChevronDown, ChevronRight, RefreshCw, Download, Monitor } from 'lucide-react'
 import { formatDate } from '../lib/helpers'
+import { useExport } from '../hooks/useExport'
 
 const ACTION_CONFIG = {
     INSERT: { label: 'Tạo mới', color: '#00B894', icon: Plus },
@@ -24,6 +25,31 @@ const TABLE_LABELS = {
     sales_forecasts: 'Dự trù Sales',
     purchase_forecasts: 'Dự trù MH',
     carriers: 'ĐV Vận chuyển',
+    deliveries: 'Giao hàng',
+}
+
+/**
+ * Parse user agent string into short browser/OS label
+ */
+function parseUserAgent(ua) {
+    if (!ua) return '—'
+    let browser = 'Unknown'
+    let os = 'Unknown'
+
+    // Browser
+    if (ua.includes('Edg/')) browser = 'Edge'
+    else if (ua.includes('Chrome/')) browser = 'Chrome'
+    else if (ua.includes('Firefox/')) browser = 'Firefox'
+    else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari'
+
+    // OS
+    if (ua.includes('Windows')) os = 'Win'
+    else if (ua.includes('Mac OS')) os = 'Mac'
+    else if (ua.includes('Linux')) os = 'Linux'
+    else if (ua.includes('Android')) os = 'Android'
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+
+    return `${browser}/${os}`
 }
 
 export default function AuditTrailPage() {
@@ -31,6 +57,8 @@ export default function AuditTrailPage() {
     const [logs, setLogs] = useState([])
     const [loading, setLoading] = useState(true)
     const [expandedId, setExpandedId] = useState(null)
+    const [hoveredId, setHoveredId] = useState(null)
+    const { exportExcel, exportPDF } = useExport()
 
     // Filters
     const [filterTable, setFilterTable] = useState('')
@@ -66,6 +94,17 @@ export default function AuditTrailPage() {
         } finally { setLoading(false) }
     }
 
+    // Export columns for audit log
+    const exportColumns = [
+        { key: 'created_at', label: 'Thời gian', exportRender: v => v ? new Date(v).toLocaleString('vi-VN') : '—' },
+        { key: 'action', label: 'Hành động', exportRender: v => ACTION_CONFIG[v]?.label || v },
+        { key: 'table_name', label: 'Module', exportRender: v => TABLE_LABELS[v] || v },
+        { key: 'user_email', label: 'Người thực hiện' },
+        { key: 'ip_address', label: 'IP Address' },
+        { key: 'user_agent', label: 'Browser/OS', exportRender: v => parseUserAgent(v) },
+        { key: 'changed_fields', label: 'Trường thay đổi', exportRender: v => Array.isArray(v) ? v.filter(f => !['updated_at', 'created_at'].includes(f)).join(', ') : '—' },
+    ]
+
     function renderChangedFields(log) {
         if (!log.changed_fields || log.changed_fields.length === 0) return null
 
@@ -98,6 +137,51 @@ export default function AuditTrailPage() {
         )
     }
 
+    // Hover tooltip for change preview
+    function ChangeTooltip({ log }) {
+        if (log.action !== 'UPDATE' || !log.changed_fields?.length) return null
+        const fields = log.changed_fields.filter(f => !['updated_at', 'created_at'].includes(f))
+        if (fields.length === 0) return null
+
+        return (
+            <div style={{
+                position: 'absolute', top: '100%', left: 60, zIndex: 50,
+                background: 'var(--bg-primary)', border: '1px solid var(--border-secondary)',
+                borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                padding: 'var(--space-3)', minWidth: 320, maxWidth: 500,
+                fontSize: 'var(--font-xs)',
+            }}>
+                <div style={{ fontWeight: 700, marginBottom: 'var(--space-2)', color: 'var(--text-secondary)' }}>
+                    📝 Chi tiết thay đổi ({fields.length} trường)
+                </div>
+                {fields.slice(0, 5).map(field => {
+                    const oldVal = log.old_values?.[field]
+                    const newVal = log.new_values?.[field]
+                    return (
+                        <div key={field} style={{
+                            display: 'flex', gap: 8, padding: '3px 0',
+                            borderBottom: '1px solid var(--border-secondary)',
+                        }}>
+                            <span style={{ fontWeight: 600, minWidth: 80, color: 'var(--text-secondary)' }}>{field}:</span>
+                            <span style={{ color: '#D63031', fontFamily: 'monospace', fontSize: 10 }}>
+                                {oldVal != null ? String(oldVal).substring(0, 40) : '∅'}
+                            </span>
+                            <span style={{ color: 'var(--text-tertiary)' }}>→</span>
+                            <span style={{ color: '#00B894', fontFamily: 'monospace', fontSize: 10 }}>
+                                {newVal != null ? String(newVal).substring(0, 40) : '∅'}
+                            </span>
+                        </div>
+                    )
+                })}
+                {fields.length > 5 && (
+                    <div style={{ color: 'var(--text-tertiary)', marginTop: 4, fontStyle: 'italic' }}>
+                        +{fields.length - 5} trường khác... (click để mở rộng)
+                    </div>
+                )}
+            </div>
+        )
+    }
+
     return (
         <div>
             <PageHeader
@@ -105,9 +189,17 @@ export default function AuditTrailPage() {
                 subtitle="Lịch sử thay đổi hệ thống — field-level tracking"
                 icon={<Shield size={20} />}
                 actions={
-                    <button className="btn btn-ghost" onClick={fetchLogs}>
-                        <RefreshCw size={16} /> Làm mới
-                    </button>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <button className="btn btn-ghost" onClick={fetchLogs}>
+                            <RefreshCw size={16} /> Làm mới
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportExcel(exportColumns, logs, 'audit_trail', 'Audit Trail')}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(exportColumns, logs, 'Lịch sử Thay đổi Hệ thống', 'audit_trail')}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
                 }
             />
 
@@ -171,22 +263,25 @@ export default function AuditTrailPage() {
                             const ac = ACTION_CONFIG[log.action] || {}
                             const Icon = ac.icon || Edit2
                             const isExpanded = expandedId === log.id
+                            const isHovered = hoveredId === log.id
 
                             return (
                                 <div key={log.id} style={{
                                     borderBottom: '1px solid var(--border-secondary)',
+                                    position: 'relative',
                                 }}>
                                     {/* Summary row */}
                                     <div
                                         onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                                        onMouseEnter={() => setHoveredId(log.id)}
+                                        onMouseLeave={() => setHoveredId(null)}
                                         style={{
                                             display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
                                             padding: 'var(--space-3) var(--space-4)',
                                             cursor: 'pointer',
                                             transition: 'background 0.2s',
+                                            background: isHovered ? 'var(--bg-secondary)' : 'transparent',
                                         }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                     >
                                         {/* Expand icon */}
                                         {log.action === 'UPDATE' ? (
@@ -222,6 +317,19 @@ export default function AuditTrailPage() {
                                             {log.user_email || 'System'}
                                         </span>
 
+                                        {/* IP Address */}
+                                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', minWidth: 90, fontFamily: 'monospace' }}>
+                                            {log.ip_address || '—'}
+                                        </span>
+
+                                        {/* Browser/OS */}
+                                        <span style={{
+                                            fontSize: 10, color: 'var(--text-tertiary)', minWidth: 70,
+                                            display: 'inline-flex', alignItems: 'center', gap: 2,
+                                        }}>
+                                            <Monitor size={10} /> {parseUserAgent(log.user_agent)}
+                                        </span>
+
                                         {/* Time */}
                                         <span style={{ fontSize: 10, color: 'var(--text-tertiary)', minWidth: 110, textAlign: 'right' }}>
                                             {log.created_at ? new Date(log.created_at).toLocaleString('vi-VN', {
@@ -229,6 +337,9 @@ export default function AuditTrailPage() {
                                             }) : ''}
                                         </span>
                                     </div>
+
+                                    {/* Hover tooltip for change preview */}
+                                    {isHovered && !isExpanded && <ChangeTooltip log={log} />}
 
                                     {/* Expanded detail */}
                                     {isExpanded && log.action === 'UPDATE' && (
@@ -264,7 +375,7 @@ export default function AuditTrailPage() {
                         padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--border-secondary)',
                     }}>
                         <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>
-                            Trang {page + 1}
+                            Trang {page + 1} · {logs.length} logs
                         </span>
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <button className="btn btn-ghost btn-sm" disabled={page === 0}

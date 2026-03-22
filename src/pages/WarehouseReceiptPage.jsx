@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
@@ -7,10 +7,11 @@ import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 import {
     Plus, Eye, Edit2, Check, Package, AlertTriangle,
-    Warehouse, CheckCircle, XCircle, FileText, ArrowDown, ShieldAlert
+    Warehouse, CheckCircle, XCircle, FileText, ArrowDown, ShieldAlert, Download
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
 import { useWarehouseReceipts } from '../hooks/useSupabaseQuery'
+import { useExport } from '../hooks/useExport'
 
 const STATUS_CONFIG = {
     pending: { label: 'Chờ kiểm tra', color: '#FDCB6E' },
@@ -25,12 +26,25 @@ export default function WarehouseReceiptPage() {
     const toast = useToast()
     const [showCreate, setShowCreate] = useState(false)
     const [showView, setShowView] = useState(null)
+    const { exportExcel, exportPDF } = useExport()
 
     // React Query: cached receipt data
     const { data: receiptData, isLoading: loading, refetch: fetchAll } = useWarehouseReceipts()
     const receipts = receiptData?.receipts || []
     const shipments = receiptData?.completedShipments || []
     const pos = receiptData?.availablePOs || []
+
+    // Export columns
+    const exportColumns = [
+        { key: 'code', label: 'Mã PNK' },
+        { key: 'source', label: 'Nguồn', exportRender: (_, r) =>
+            r.import_shipment ? `NK: ${r.import_shipment.code}` : r.po_direct ? `PO: ${r.po_direct.code}` : '—' },
+        { key: 'supplier', label: 'NCC', exportRender: (_, r) =>
+            r.import_shipment?.po?.supplier?.name || r.po_direct?.supplier?.name || '—' },
+        { key: 'received_date', label: 'Ngày nhập', exportRender: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
+        { key: 'items_count', label: 'Số SP', exportRender: (_, r) => r.receipt_items?.length || 0 },
+        { key: 'status', label: 'Trạng thái', exportRender: v => STATUS_CONFIG[v]?.label || v },
+    ]
 
     // ========== CREATE RECEIPT ==========
     function CreateModal({ onClose }) {
@@ -479,11 +493,21 @@ export default function WarehouseReceiptPage() {
                 title="Nhập kho"
                 subtitle="Kiểm đếm, đối chiếu, nhập kho theo GSP"
                 icon={<Warehouse size={20} />}
-                actions={isRole(ROLES.WAREHOUSE_KEEPER, ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
-                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                        <Plus size={16} /> Tạo phiếu nhập kho
-                    </button>
-                )}
+                actions={
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        {isRole(ROLES.WAREHOUSE_KEEPER, ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                                <Plus size={16} /> Tạo phiếu nhập kho
+                            </button>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => exportExcel(exportColumns, receipts, 'nhap_kho', 'Nhập Kho')}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(exportColumns, receipts, 'Danh sách Phiếu Nhập Kho', 'nhap_kho')}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                }
             />
 
             {loading ? (

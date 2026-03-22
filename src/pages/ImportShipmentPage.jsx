@@ -5,12 +5,13 @@ import { useToast } from '../components/Toast'
 import CrossVerificationPanel from '../components/CrossVerificationPanel'
 import {
     Plus, Eye, Edit2, Truck, Check, Upload, FileText,
-    AlertTriangle, CheckCircle, XCircle, Globe, DollarSign, Clock, Paperclip
+    AlertTriangle, CheckCircle, XCircle, Globe, DollarSign, Clock, Paperclip, Download
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 import { useImportShipments } from '../hooks/useSupabaseQuery'
+import { useExport } from '../hooks/useExport'
 
 const STATUS_CONFIG = {
     in_transit: { label: 'Đang vận chuyển', color: '#0984E3', icon: '🚢' },
@@ -39,11 +40,22 @@ export default function ImportShipmentPage() {
     const toast = useToast()
     const [showCreate, setShowCreate] = useState(false)
     const [showView, setShowView] = useState(null)
+    const { exportExcel, exportPDF } = useExport()
 
     // React Query: cached shipment data
     const { data: shipmentData, isLoading: loading, refetch: fetchAll } = useImportShipments()
     const shipments = shipmentData?.shipments || []
     const pos = shipmentData?.availablePOs || []
+
+    // Export columns
+    const exportColumns = [
+        { key: 'code', label: 'Mã NK' },
+        { key: 'po_code', label: 'PO', exportRender: (_, r) => r.po?.code || '—' },
+        { key: 'supplier', label: 'NCC', exportRender: (_, r) => r.po?.supplier?.name || '—' },
+        { key: 'port', label: 'Cảng' },
+        { key: 'total_cost', label: 'Tổng CP', exportRender: v => v ? Number(v).toLocaleString('vi-VN') + ' đ' : '—' },
+        { key: 'status', label: 'Trạng thái', exportRender: v => STATUS_CONFIG[v]?.label || v },
+    ]
 
     // ========== Timeline Component ==========
     function StatusTimeline({ currentStatus }) {
@@ -668,11 +680,21 @@ export default function ImportShipmentPage() {
                 title="Nhập khẩu"
                 subtitle="Quản lý lô nhập khẩu, chứng từ hải quan, chi phí CIF"
                 icon={<Globe size={20} />}
-                actions={isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
-                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                        <Plus size={16} /> Tạo lô NK mới
-                    </button>
-                )}
+                actions={
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        {isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                                <Plus size={16} /> Tạo lô NK mới
+                            </button>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => exportExcel(exportColumns, shipments, 'nhap_khau', 'Nhập Khẩu')}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(exportColumns, shipments, 'Danh sách Lô Nhập Khẩu', 'nhap_khau')}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                }
             />
 
             {loading ? (
