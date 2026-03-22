@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth, ROLE_LABELS, ROLE_COLORS } from '../lib/auth'
 import {
@@ -51,6 +51,7 @@ const PAGE_TITLES = {
 export default function Layout({ children }) {
     const { profile, signOut, hasAccess } = useAuth()
     const location = useLocation()
+    const navigate = useNavigate()
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
     const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true')
 
@@ -119,14 +120,14 @@ export default function Layout({ children }) {
                         <div
                             className="sidebar-avatar"
                             style={{ background: ROLE_COLORS[profile?.role] || '#636E72', cursor: 'pointer' }}
-                            onClick={() => window.location.href = '/profile'}
+                            onClick={() => navigate('/profile')}
                             title="Xem hồ sơ"
                         >
                             {initials}
                         </div>
                         {!collapsed && (
                             <div className="sidebar-user-info" style={{ cursor: 'pointer' }}
-                                onClick={() => window.location.href = '/profile'}>
+                                onClick={() => navigate('/profile')}>
                                 <div className="sidebar-user-name">{profile?.full_name || 'User'}</div>
                                 <div className="sidebar-user-role">{ROLE_LABELS[profile?.role] || profile?.role}</div>
                             </div>

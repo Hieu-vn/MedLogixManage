@@ -18,9 +18,21 @@ export default function ProfilePage() {
     const [formData, setFormData] = useState({})
     const [pwData, setPwData] = useState({ current: '', newPw: '', confirm: '' })
     const [saving, setSaving] = useState(false)
-    const [notifSettings, setNotifSettings] = useState({
-        po_pending: true, overdue: true, expiring: true, low_stock: true,
+    const [notifSettings, setNotifSettings] = useState(() => {
+        try {
+            const saved = localStorage.getItem('notif_settings')
+            return saved ? JSON.parse(saved) : {
+                po_pending: true, overdue: true, expiring: true, low_stock: true,
+            }
+        } catch {
+            return { po_pending: true, overdue: true, expiring: true, low_stock: true }
+        }
     })
+
+    // Persist notification settings to localStorage
+    useEffect(() => {
+        localStorage.setItem('notif_settings', JSON.stringify(notifSettings))
+    }, [notifSettings])
 
     function startEdit() {
         setFormData({ full_name: profile?.full_name || '', phone: profile?.phone || '' })
@@ -36,7 +48,9 @@ export default function ProfilePage() {
                 .update({ full_name: formData.full_name, phone: formData.phone })
                 .eq('id', profile.id)
             if (error) throw error
-            toast.success('Cập nhật thành công! Refresh để thấy thay đổi.')
+            // Clear profile cache so sidebar and other components reflect updated info
+            sessionStorage.removeItem('user_profile')
+            toast.success('Cập nhật thành công!')
             setEditing(false)
         } catch (err) { toast.error('Lỗi: ' + err.message) }
         finally { setSaving(false) }

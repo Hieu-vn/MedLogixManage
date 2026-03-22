@@ -1,6 +1,4 @@
-import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useToast } from './Toast'
 
 /**
  * RoleGuard — Protects routes by module access
@@ -8,7 +6,6 @@ import { useToast } from './Toast'
  */
 export default function RoleGuard({ module, children }) {
     const { profile, hasAccess } = useAuth()
-    const toast = useToast()
 
     if (!profile) return null
 

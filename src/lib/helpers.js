@@ -1,4 +1,10 @@
 /**
+ * Re-export date utilities from dateUtils.js (single source of truth)
+ * This ensures all existing `import { formatDate } from '../lib/helpers'` still work.
+ */
+export { formatDate, formatDateTime, daysBetween } from './dateUtils'
+
+/**
  * Cached Intl formatters (singleton pattern — created once, reused forever)
  */
 const currencyFormatters = {}
@@ -13,42 +19,12 @@ function getCurrencyFormatter(currency) {
     return currencyFormatters[currency]
 }
 
-const dateFormatter = new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-})
-
-const dateTimeFormatter = new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-})
-
 /**
  * Format number as Vietnamese currency (VND)
  */
 export function formatCurrency(amount, currency = 'VND') {
     if (amount == null) return '—'
     return getCurrencyFormatter(currency).format(amount)
-}
-
-/**
- * Format date to Vietnamese locale
- */
-export function formatDate(dateStr) {
-    if (!dateStr) return '—'
-    return dateFormatter.format(new Date(dateStr))
-}
-
-/**
- * Format datetime
- */
-export function formatDateTime(dateStr) {
-    if (!dateStr) return '—'
-    return dateTimeFormatter.format(new Date(dateStr))
 }
 
 /**
@@ -67,16 +43,6 @@ export function generateCode(prefix) {
     const s = String(now.getSeconds()).padStart(2, '0')
     const rand = Math.random().toString(36).substring(2, 8)
     return `${prefix}-${year}${month}${day}-${h}${m}${s}-${rand}`
-}
-
-/**
- * Calculate days between two dates
- */
-export function daysBetween(date1, date2) {
-    const d1 = new Date(date1)
-    const d2 = new Date(date2)
-    const diffTime = d2.getTime() - d1.getTime()
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 }
 
 /**

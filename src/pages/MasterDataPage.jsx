@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import DataTable from '../components/DataTable'
@@ -28,25 +28,19 @@ export default function MasterDataPage() {
     const [historyData, setHistoryData] = useState([])
     const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'active' | 'inactive'
     const [importing, setImporting] = useState(false)
+    const [deleteTarget, setDeleteTarget] = useState(null) // item to delete
     const toast = useToast()
 
-    useEffect(() => {
-        fetchData()
-        if (activeTab === 'price_list') {
-            fetchLookups()
-        }
-    }, [activeTab])
-
-    async function fetchLookups() {
+    const fetchLookups = useCallback(async function() {
         const [{ data: prods }, { data: supps }] = await Promise.all([
             supabase.from('products').select('id, code, name').order('code'),
             supabase.from('suppliers').select('id, name').order('name'),
         ])
         setProducts(prods || [])
         setSuppliers(supps || [])
-    }
+    }, [])
 
-    async function fetchData() {
+    const fetchData = useCallback(async function() {
         setLoading(true)
         try {
             if (activeTab === 'price_list') {
@@ -75,7 +69,14 @@ export default function MasterDataPage() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [activeTab, toast])
+
+    useEffect(() => {
+        fetchData()
+        if (activeTab === 'price_list') {
+            fetchLookups()
+        }
+    }, [activeTab, fetchData, fetchLookups])
 
     function handleAdd() {
         setEditingItem(null)
@@ -88,15 +89,21 @@ export default function MasterDataPage() {
     }
 
     async function handleDelete(item) {
-        if (!confirm(`Xóa "${item.name || item.product_name || item.code}"?`)) return
+        setDeleteTarget(item)
+    }
+
+    async function confirmDelete() {
+        if (!deleteTarget) return
         try {
             const table = activeTab === 'price_list' ? 'price_list' : activeTab
-            const { error } = await supabase.from(table).delete().eq('id', item.id)
+            const { error } = await supabase.from(table).delete().eq('id', deleteTarget.id)
             if (error) throw error
             toast.success('Đã xóa thành công')
             fetchData()
         } catch (err) {
             toast.error('Lỗi xóa: ' + err.message)
+        } finally {
+            setDeleteTarget(null)
         }
     }
 
@@ -460,6 +467,18 @@ export default function MasterDataPage() {
                     </div>
                 </>
             )}
+
+            {/* Delete Confirm Dialog */}
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={confirmDelete}
+                title="Xác nhận xóa"
+                message={`Bạn có chắc chắn muốn xóa "${deleteTarget?.name || deleteTarget?.product_name || deleteTarget?.code || ''}"? Hành động này không thể hoàn tác.`}
+                type="danger"
+                confirmText="Xóa"
+                cancelText="Hủy"
+            />
         </div>
     )
 }

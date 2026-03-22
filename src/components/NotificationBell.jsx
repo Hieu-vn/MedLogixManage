@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Bell, Clock, AlertTriangle, Package, CheckCircle, X } from 'lucide-react'
-import { formatDate, getExpiryWarning } from '../lib/helpers'
+import { formatDate } from '../lib/helpers'
 
 /**
  * NotificationBell — shows badge count and dropdown with recent alerts

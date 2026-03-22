@@ -59,6 +59,7 @@ export default function AuditTrailPage() {
     const [expandedId, setExpandedId] = useState(null)
     const [hoveredId, setHoveredId] = useState(null)
     const { exportExcel, exportPDF } = useExport()
+    const [totalCount, setTotalCount] = useState(0)
 
     // Filters
     const [filterTable, setFilterTable] = useState('')
@@ -89,6 +90,7 @@ export default function AuditTrailPage() {
             const { data, count, error } = await query
             if (error) throw error
             setLogs(data || [])
+            setTotalCount(count || 0)
         } catch (err) {
             toast.error('Lỗi tải audit log: ' + err.message)
         } finally { setLoading(false) }
@@ -375,7 +377,7 @@ export default function AuditTrailPage() {
                         padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--border-secondary)',
                     }}>
                         <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>
-                            Trang {page + 1} · {logs.length} logs
+                            Trang {page + 1}{totalCount > 0 ? ` / ${Math.ceil(totalCount / PAGE_SIZE)}` : ''} · {totalCount} logs
                         </span>
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <button className="btn btn-ghost btn-sm" disabled={page === 0}
