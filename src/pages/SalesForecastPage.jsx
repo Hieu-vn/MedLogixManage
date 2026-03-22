@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../lib/auth'
+import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
 import { useSalesForecasts, useProducts, useHospitals } from '../hooks/useSupabaseQuery'
 import { daysFromNow, toISOString } from '../lib/dateUtils'
@@ -27,7 +27,7 @@ const PR_PURPOSES = [
 ]
 
 export default function SalesForecastPage() {
-    const { profile, hasAccess } = useAuth()
+    const { profile, isRole } = useAuth()
     const toast = useToast()
     const queryClient = useQueryClient()
     const [modalOpen, setModalOpen] = useState(false)
@@ -37,8 +37,9 @@ export default function SalesForecastPage() {
     const [statusFilter, setStatusFilter] = useState('all')
     const [confirmDelete, setConfirmDelete] = useState(null)
 
-    const isSales = profile?.role === 'sales'
-    const isManager = ['sales_manager', 'admin'].includes(profile?.role)
+    // P1+P2: Correct role-based permission flags
+    const canCreate = isRole(ROLES.SALES, ROLES.SALES_MANAGER, ROLES.ADMIN)
+    const canApproveReject = isRole(ROLES.SALES_MANAGER, ROLES.LOGISTICS_MANAGER, ROLES.DIRECTOR, ROLES.ADMIN)
     const { exportExcel, exportPDF } = useExport()
 
     // React Query: auto-cached forecast list
@@ -104,6 +105,8 @@ export default function SalesForecastPage() {
     }
 
     async function handleApprove(forecast) {
+        // P3: Role guard — only authorized roles can approve
+        if (!canApproveReject) { toast.error('Không có quyền duyệt phiếu'); return }
         try {
             const { error } = await supabase
                 .from('sales_forecasts')
@@ -124,6 +127,8 @@ export default function SalesForecastPage() {
     }
 
     async function handleReject(forecast, reason) {
+        // P3: Role guard — only authorized roles can reject
+        if (!canApproveReject) { toast.error('Không có quyền từ chối phiếu'); return }
         try {
             const { error } = await supabase
                 .from('sales_forecasts')
@@ -224,7 +229,7 @@ export default function SalesForecastPage() {
                     <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleView(row) }} title="Xem">
                         <Eye size={14} />
                     </button>
-                    {row.status === 'draft' && (isSales || profile?.role === 'admin') && (
+                    {row.status === 'draft' && canCreate && (
                         <>
                             <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleEdit(row) }} title="Sửa">
                                 <Edit2 size={14} />
@@ -252,7 +257,7 @@ export default function SalesForecastPage() {
                 icon={<FileText size={20} />}
                 actions={
                     <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        {(isSales || profile?.role === 'admin') && (
+                        {canCreate && (
                             <button className="btn btn-primary" onClick={handleCreate}>
                                 <Plus size={16} /> Tạo phiếu mới
                             </button>
@@ -350,7 +355,7 @@ export default function SalesForecastPage() {
                 isOpen={viewModalOpen}
                 onClose={() => setViewModalOpen(false)}
                 forecast={viewingForecast}
-                isManager={isManager}
+                isManager={canApproveReject}
                 onApprove={handleApprove}
                 onReject={handleReject}
             />

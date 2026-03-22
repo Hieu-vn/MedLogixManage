@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../lib/auth'
+import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -17,7 +17,7 @@ import {
 import { useExport } from '../hooks/useExport'
 
 export default function PurchaseForecastPage() {
-    const { profile } = useAuth()
+    const { profile, isRole } = useAuth()
     const toast = useToast()
     const navigate = useNavigate()
     const queryClient = useQueryClient()
@@ -26,7 +26,9 @@ export default function PurchaseForecastPage() {
     const [viewingForecast, setViewingForecast] = useState(null)
     const [statusFilter, setStatusFilter] = useState('all')
 
-    const isLogistics = ['logistics_manager', 'admin'].includes(profile?.role)
+    // P4: Correct permission flags — director can approve but not create/submit
+    const canManage = isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN)
+    const canApprove = isRole(ROLES.LOGISTICS_MANAGER, ROLES.DIRECTOR, ROLES.ADMIN)
     const { exportExcel, exportPDF } = useExport()
 
     // React Query: cached forecast list
@@ -56,6 +58,8 @@ export default function PurchaseForecastPage() {
     }
 
     async function handleApprove(forecast) {
+        // P5: Role guard — only authorized roles can approve
+        if (!canApprove) { toast.error('Không có quyền duyệt'); return }
         try {
             const items = forecast.purchase_forecast_items || []
 
@@ -202,7 +206,7 @@ export default function PurchaseForecastPage() {
             render: (_, row) => (
                 <div style={{ display: 'flex', gap: '4px' }}>
                     <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleView(row) }} title="Xem"><Eye size={14} /></button>
-                    {row.status === 'draft' && isLogistics && (
+                    {row.status === 'draft' && canManage && (
                         <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleSubmit(row) }} title="Gửi duyệt" style={{ color: 'var(--accent-500)' }}><Send size={14} /></button>
                     )}
                 </div>
@@ -218,7 +222,7 @@ export default function PurchaseForecastPage() {
                 icon={<ClipboardList size={20} />}
                 actions={
                     <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        {isLogistics && (
+                        {canManage && (
                             <button className="btn btn-primary" onClick={() => setCreateModalOpen(true)}>
                                 <Plus size={16} /> Tạo phiếu tổng hợp
                             </button>
@@ -288,7 +292,7 @@ export default function PurchaseForecastPage() {
                 isOpen={viewModalOpen}
                 onClose={() => setViewModalOpen(false)}
                 forecast={viewingForecast}
-                isLogistics={isLogistics}
+                isLogistics={canApprove}
                 onApprove={handleApprove}
             />
         </div>
