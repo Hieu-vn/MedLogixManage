@@ -12,11 +12,19 @@ import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
 import { generateCode, formatDate } from '../lib/helpers'
+import { useExport } from '../hooks/useExport'
 import {
     Plus, Eye, Edit2, Trash2, Send, FileText,
     Search, X, CheckCircle, XCircle, Package,
-    ChevronDown, Clock, AlertTriangle
+    ChevronDown, Clock, AlertTriangle, Download
 } from 'lucide-react'
+
+// Business Rule: PR purpose types (câu hỏi hệ thống PDF)
+const PR_PURPOSES = [
+    { key: 'ban_moi', label: 'Bán mới', color: '#0984E3', icon: '🛒' },
+    { key: 'muon_demo', label: 'Mượn / Demo', color: '#6C5CE7', icon: '🔬' },
+    { key: 'tang', label: 'Tặng', color: '#00B894', icon: '🎁' },
+]
 
 export default function SalesForecastPage() {
     const { profile, hasAccess } = useAuth()
@@ -31,6 +39,7 @@ export default function SalesForecastPage() {
 
     const isSales = profile?.role === 'sales'
     const isManager = ['sales_manager', 'admin'].includes(profile?.role)
+    const { exportExcel, exportPDF } = useExport()
 
     // React Query: auto-cached forecast list
     const { data: forecasts = [], isLoading: loading, refetch: fetchForecasts } = useSalesForecasts(statusFilter)
@@ -146,6 +155,18 @@ export default function SalesForecastPage() {
         },
         { key: 'title', label: 'Tiêu đề', sortable: true },
         {
+            key: 'purpose', label: 'Mục đích', width: '120px',
+            render: (v) => {
+                const p = PR_PURPOSES.find(p => p.key === v)
+                if (!p) return <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+                return (
+                    <span className="status-badge" style={{ background: `${p.color}20`, color: p.color, fontSize: 'var(--font-xs)' }}>
+                        {p.icon} {p.label}
+                    </span>
+                )
+            },
+        },
+        {
             key: 'creator', label: 'Người tạo', width: '140px',
             render: (v) => v?.full_name || '—',
         },
@@ -199,11 +220,31 @@ export default function SalesForecastPage() {
                 title="Dự trù từ Sales"
                 subtitle="Tạo và quản lý phiếu dự trù thiết bị/vật tư y tế"
                 icon={<FileText size={20} />}
-                actions={(isSales || profile?.role === 'admin') && (
-                    <button className="btn btn-primary" onClick={handleCreate}>
-                        <Plus size={16} /> Tạo phiếu mới
-                    </button>
-                )}
+                actions={
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        {(isSales || profile?.role === 'admin') && (
+                            <button className="btn btn-primary" onClick={handleCreate}>
+                                <Plus size={16} /> Tạo phiếu mới
+                            </button>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => exportExcel(
+                            [{ key: 'code', label: 'Mã phiếu' }, { key: 'title', label: 'Tiêu đề' },
+                             { key: 'purpose', label: 'Mục đích', exportRender: v => PR_PURPOSES.find(p => p.key === v)?.label || '' },
+                             { key: 'status', label: 'Trạng thái' }],
+                            filteredForecasts, 'du_tru_sales', 'Sales Forecast'
+                        )}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(
+                            [{ key: 'code', label: 'Mã phiếu' }, { key: 'title', label: 'Tiêu đề' },
+                             { key: 'purpose', label: 'Mục đích', exportRender: v => PR_PURPOSES.find(p => p.key === v)?.label || '' },
+                             { key: 'status', label: 'Trạng thái' }],
+                            filteredForecasts, 'Danh sách Dự Trù Sales', 'du_tru_sales'
+                        )}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                }
             />
 
             {/* Stat Cards */}
@@ -303,7 +344,7 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
     const queryClient = useQueryClient()
     // React Hook Form for header fields
     const { register, handleSubmit, reset, formState: { errors } } = useForm({
-        defaultValues: { title: '', notes: '' },
+        defaultValues: { title: '', notes: '', purpose: '' },
     })
     const [items, setItems] = useState([])
     const [saving, setSaving] = useState(false)
@@ -318,7 +359,7 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
     useEffect(() => {
         if (isOpen) {
             if (forecast) {
-                reset({ title: forecast.title || '', notes: forecast.notes || '' })
+                reset({ title: forecast.title || '', notes: forecast.notes || '', purpose: forecast.purpose || '' })
                 setItems(forecast.sales_forecast_items?.map(item => ({
                     id: item.id,
                     product_id: item.product?.id || '',
@@ -330,7 +371,7 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                     _hospitalName: item.hospital?.name || '',
                 })) || [])
             } else {
-                reset({ title: '', notes: '' })
+                reset({ title: '', notes: '', purpose: '' })
                 setItems([])
             }
             setDuplicateWarning(null)
@@ -469,7 +510,7 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                 const code = generateCode('SF')
                 const { data: newForecast, error: createErr } = await supabase
                     .from('sales_forecasts')
-                    .insert({ code, title, notes, created_by: profile.id, sales_person: profile.id, status: 'draft' })
+                    .insert({ code, title, notes, purpose: formData.purpose || null, created_by: profile.id, sales_person: profile.id, status: 'draft' })
                     .select()
                     .single()
                 if (createErr) throw createErr
@@ -516,7 +557,7 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
             }
         >
             {/* Header Fields — react-hook-form */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 <div className="form-group">
                     <label className="form-label required">Tiêu đề phiếu</label>
                     <input
@@ -525,6 +566,16 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
                         placeholder="VD: Dự trù tháng 3/2026 - BV Đà Nẵng"
                     />
                     {errors.title && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.title.message}</span>}
+                </div>
+                <div className="form-group">
+                    <label className="form-label required">Mục đích</label>
+                    <select className="form-input" {...register('purpose', { required: 'Chọn mục đích' })}>
+                        <option value="">-- Chọn mục đích --</option>
+                        {PR_PURPOSES.map(p => (
+                            <option key={p.key} value={p.key}>{p.icon} {p.label}</option>
+                        ))}
+                    </select>
+                    {errors.purpose && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.purpose.message}</span>}
                 </div>
                 <div className="form-group">
                     <label className="form-label">Ghi chú</label>

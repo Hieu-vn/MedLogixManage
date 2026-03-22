@@ -309,3 +309,67 @@ export function useWarehouseReceipts(options = {}) {
         ...options,
     })
 }
+
+// ========================
+// Delivery Hooks
+// ========================
+
+/** All deliveries with items, hospital, carrier, rating */
+export function useDeliveries(options = {}) {
+    return useQuery({
+        queryKey: ['deliveries'],
+        queryFn: async () => {
+            const [dlRes, rcRes, hospRes, carrRes] = await Promise.all([
+                supabase.from('deliveries').select(`
+                    *,
+                    hospital:hospitals(id, name),
+                    carrier:carriers(id, name, has_cold_chain, phone, avg_score),
+                    warehouse_receipt:warehouse_receipts(id, code),
+                    created_by_profile:profiles!deliveries_created_by_fkey(full_name),
+                    delivery_items(*, product:products(id, code, name, unit, storage_condition)),
+                    carrier_rating:carrier_ratings(*)
+                `).order('created_at', { ascending: false }),
+                supabase.from('warehouse_receipts').select(`
+                    id, code,
+                    po_direct:purchase_orders(code, supplier:suppliers(name)),
+                    import_shipment:import_shipments(code, po:purchase_orders(code, supplier:suppliers(name)))
+                `).eq('status', 'completed'),
+                supabase.from('hospitals').select('id, name').eq('is_active', true).order('name'),
+                supabase.from('carriers').select('*').eq('is_active', true).order('name'),
+            ])
+
+            // Flatten carrier_rating from array to single object
+            const deliveries = (dlRes.data || []).map(d => ({
+                ...d,
+                carrier_rating: d.carrier_rating?.[0] || null,
+            }))
+
+            return {
+                deliveries,
+                completedReceipts: rcRes.data || [],
+                hospitals: hospRes.data || [],
+                carriers: carrRes.data || [],
+            }
+        },
+        staleTime: 15 * 1000,
+        ...options,
+    })
+}
+
+/** Cached carriers list with avg_score */
+export function useCarriers(options = {}) {
+    return useQuery({
+        queryKey: ['carriers', 'active'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('carriers')
+                .select('*')
+                .eq('is_active', true)
+                .order('name')
+            if (error) throw error
+            return data || []
+        },
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    })
+}

@@ -12,11 +12,15 @@ import {
     Plus, Eye, Edit2, Send, Trash2, Check, X,
     ShoppingCart, AlertTriangle, TrendingUp, TrendingDown,
     Package, DollarSign, FileText, CheckCircle, Clock,
-    Filter, Calendar
+    Filter, Calendar, Download
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '../lib/helpers'
 import { usePurchaseOrders, usePOMasterData } from '../hooks/useSupabaseQuery'
 import POTimeline, { getOverdueBadge } from '../components/POTimeline'
+import { useExport } from '../hooks/useExport'
+
+// Business Rule: PO > 200,000,000 VNĐ requires Director approval
+const DIRECTOR_APPROVAL_THRESHOLD = 200_000_000
 
 const PO_STATUS_CONFIG = {
     draft: { label: 'Nháp', color: '#636E72' },
@@ -631,13 +635,41 @@ export default function PurchaseOrderPage() {
     }
 
     // ========== ACTIONS ==========
+    const { exportExcel, exportPDF } = useExport()
+
+    // Export columns for PO
+    const exportColumns = [
+        { key: 'code', label: 'Mã PO' },
+        { key: 'supplier_name', label: 'Nhà cung cấp', exportRender: (_, row) => row.supplier?.name || '' },
+        { key: 'grand_total', label: 'Tổng giá trị', exportRender: (_, row) => row.grand_total || 0 },
+        { key: 'status', label: 'Trạng thái', exportRender: (_, row) => PO_STATUS_CONFIG[row.status]?.label || row.status },
+        { key: 'created_at', label: 'Ngày tạo', exportRender: (_, row) => formatDate(row.created_at) },
+        { key: 'expected_delivery', label: 'Ngày giao DK', exportRender: (_, row) => formatDate(row.expected_delivery) },
+    ]
+
     async function handleSubmitForApproval(po) {
         if (po.po_items?.length === 0) { toast.warning('PO chưa có sản phẩm'); return }
-        const { error } = await supabase.from('purchase_orders').update({
-            status: 'pending', updated_at: new Date().toISOString(),
-        }).eq('id', po.id)
-        if (error) { toast.error('Lỗi: ' + error.message); return }
-        toast.success('Đã gửi PO chờ Giám đốc duyệt!')
+
+        // Business Rule: PO > 200M VNĐ → Director approval required
+        const needsDirector = (po.grand_total || 0) > DIRECTOR_APPROVAL_THRESHOLD
+
+        if (needsDirector) {
+            const { error } = await supabase.from('purchase_orders').update({
+                status: 'pending', updated_at: new Date().toISOString(),
+            }).eq('id', po.id)
+            if (error) { toast.error('Lỗi: ' + error.message); return }
+            toast.success(`PO ${po.code} (${formatCurrency(po.grand_total)}) > 200 triệu → Gửi GĐ duyệt`)
+        } else {
+            // Auto-approve PO under threshold
+            const { error } = await supabase.from('purchase_orders').update({
+                status: 'approved',
+                approved_by: profile.id,
+                approved_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            }).eq('id', po.id)
+            if (error) { toast.error('Lỗi: ' + error.message); return }
+            toast.success(`PO ${po.code} (${formatCurrency(po.grand_total)}) ≤ 200 triệu → Tự động duyệt ✅`)
+        }
         fetchAll()
     }
 
@@ -731,11 +763,21 @@ export default function PurchaseOrderPage() {
                 title="Quản lý Đặt hàng"
                 subtitle="Tạo và quản lý đơn đặt hàng cho nhà cung cấp"
                 icon={<ShoppingCart size={20} />}
-                actions={isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
-                    <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                        <Plus size={16} /> Tạo PO mới
-                    </button>
-                )}
+                actions={
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        {isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN) && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+                                <Plus size={16} /> Tạo PO mới
+                            </button>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => exportExcel(exportColumns, filteredOrders, 'purchase_orders', 'PO')}>
+                            <Download size={14} /> Excel
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => exportPDF(exportColumns, filteredOrders, 'Danh sách Đơn Đặt Hàng', 'purchase_orders')}>
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                }
             />
 
             {/* PO Stat Cards — wireframe P1 */}
