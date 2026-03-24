@@ -194,38 +194,111 @@ export function useInventoryData(options = {}) {
     })
 }
 
-/** Inventory movements: receipts + exports for period-based report */
+/** Inventory movements: receipts + exports for period-based report.
+ * Queries parent tables first, then fetches items. Also fetches
+ * ALL movements before startDate to compute true opening stock.
+ */
 export function useInventoryMovements(startDate, endDate, options = {}) {
     return useQuery({
         queryKey: ['inventory_movements', startDate, endDate],
         queryFn: async () => {
-            const [receiptsRes, exportsRes] = await Promise.all([
-                supabase.from('receipt_items')
-                    .select(`
-                        id, product_id, lot_number, quantity, expiry_date, created_at,
-                        product:products(id, code, name, unit, category, manufacturer),
-                        receipt:warehouse_receipts!inner(id, code, received_date, status)
-                    `)
-                    .gte('receipt.received_date', startDate)
-                    .lte('receipt.received_date', endDate)
-                    .eq('receipt.status', 'completed'),
-                supabase.from('stock_export_items')
-                    .select(`
-                        id, product_id, lot_number, quantity, expiry_date, created_at,
-                        product:products(id, code, name, unit, category, manufacturer),
-                        export:stock_exports!inner(id, code, export_date, status)
-                    `)
-                    .gte('export.export_date', startDate)
-                    .lte('export.export_date', endDate)
-                    .eq('export.status', 'completed'),
+            // 1. Get completed warehouse receipts in the period
+            const { data: receiptsInPeriod } = await supabase
+                .from('warehouse_receipts')
+                .select('id')
+                .eq('status', 'completed')
+                .gte('receipt_date', startDate)
+                .lte('receipt_date', endDate)
+            const receiptIds = (receiptsInPeriod || []).map(r => r.id)
+
+            // 2. Get completed stock exports in the period
+            const { data: exportsInPeriod } = await supabase
+                .from('stock_exports')
+                .select('id')
+                .eq('status', 'completed')
+                .gte('export_date', startDate)
+                .lte('export_date', endDate)
+            const exportIds = (exportsInPeriod || []).map(e => e.id)
+
+            // 3. Get receipts BEFORE the period (for opening stock calculation)
+            const { data: receiptsBefore } = await supabase
+                .from('warehouse_receipts')
+                .select('id')
+                .eq('status', 'completed')
+                .lt('receipt_date', startDate)
+            const receiptIdsBefore = (receiptsBefore || []).map(r => r.id)
+
+            // 4. Get exports BEFORE the period (for opening stock calculation)
+            const { data: exportsBefore } = await supabase
+                .from('stock_exports')
+                .select('id')
+                .eq('status', 'completed')
+                .lt('export_date', startDate)
+            const exportIdsBefore = (exportsBefore || []).map(e => e.id)
+
+            // 5. Fetch items in parallel (only if we have IDs)
+            const fetchItems = async (table, fkCol, ids, qtyField) => {
+                if (ids.length === 0) return []
+                const { data } = await supabase
+                    .from(table)
+                    .select(`id, product_id, ${qtyField}, lot_number, expiry_date,
+                        product:products(id, code, name, unit, category, manufacturer)`)
+                    .in(fkCol, ids)
+                return (data || []).map(d => ({ ...d, quantity: d[qtyField] || 0 }))
+            }
+
+            const [periodReceipts, periodExports, beforeReceipts, beforeExports] = await Promise.all([
+                fetchItems('receipt_items', 'receipt_id', receiptIds, 'actual_quantity'),
+                fetchItems('stock_export_items', 'export_id', exportIds, 'quantity'),
+                fetchItems('receipt_items', 'receipt_id', receiptIdsBefore, 'actual_quantity'),
+                fetchItems('stock_export_items', 'export_id', exportIdsBefore, 'quantity'),
             ])
+
             return {
-                receiptItems: receiptsRes.data || [],
-                exportItems: exportsRes.data || [],
+                periodReceipts,   // imports during period
+                periodExports,    // exports during period
+                beforeReceipts,   // ALL imports before period
+                beforeExports,    // ALL exports before period
             }
         },
         enabled: !!startDate && !!endDate,
         staleTime: 30 * 1000,
+        ...options,
+    })
+}
+
+/** Stock transfer requests + transfers with items */
+export function useStockTransfers(options = {}) {
+    return useQuery({
+        queryKey: ['stock_transfers'],
+        queryFn: async () => {
+            const [reqRes, trRes, lotsRes] = await Promise.all([
+                supabase.from('stock_transfer_requests').select(`
+                    *,
+                    requested_by_profile:profiles!stock_transfer_requests_requested_by_fkey(full_name),
+                    approved_by_profile:profiles!stock_transfer_requests_approved_by_fkey(full_name),
+                    stock_transfer_request_items(*, product:products(id, code, name, unit, manufacturer))
+                `).order('created_at', { ascending: false }),
+                supabase.from('stock_transfers').select(`
+                    *,
+                    request:stock_transfer_requests(id, code, from_warehouse, to_warehouse),
+                    transferred_by_profile:profiles!stock_transfers_transferred_by_fkey(full_name),
+                    received_by_profile:profiles!stock_transfers_received_by_fkey(full_name),
+                    stock_transfer_items(*, product:products(id, code, name, unit, manufacturer))
+                `).order('created_at', { ascending: false }),
+                supabase.from('inventory_lots')
+                    .select('*, product:products(id, code, name, unit, manufacturer, packaging)')
+                    .eq('status', 'available')
+                    .gt('quantity', 0)
+                    .order('expiry_date', { ascending: true }),
+            ])
+            return {
+                requests: reqRes.data || [],
+                transfers: trRes.data || [],
+                availableLots: lotsRes.data || [],
+            }
+        },
+        staleTime: 15 * 1000,
         ...options,
     })
 }

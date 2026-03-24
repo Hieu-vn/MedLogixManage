@@ -150,7 +150,7 @@ export default function InventoryPage() {
                 <>
                     {/* Tab: Tổng quan */}
                     {activeTab === 'overview' && (
-                        <OverviewTab lots={lots} productStock={productStock} />
+                        <OverviewTab lots={lots} productStock={productStock} onNavigateTab={setActiveTab} />
                     )}
 
                     {/* Tab: Tồn kho Lot */}
@@ -259,7 +259,7 @@ export default function InventoryPage() {
                     )}
 
                     {/* Tab: Biến động kho */}
-                    {activeTab === 'movements' && <MovementsTab lots={lots} />}
+                    {activeTab === 'movements' && <MovementsTab />}
 
                     {/* Tab: Cảnh báo HSD */}
                     {activeTab === 'expiry' && <ExpiryTab lots={lots} />}

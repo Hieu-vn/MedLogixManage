@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useAuth, ROLE_LABELS, ROLE_COLORS } from '../lib/auth'
 import {
     LayoutDashboard, FileText, ClipboardList, ShoppingCart,
-    Ship, Warehouse, Truck, Database, LogOut,
+    Ship, Warehouse, Truck, Database, LogOut, ArrowRightLeft,
     Sun, Moon, ChevronRight, ChevronLeft, Shield, PanelLeftClose, PanelLeftOpen,
     PackageOpen, LogOut as LogOutIcon
 } from 'lucide-react'
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
             { path: '/warehouse', label: 'Nhập kho', icon: Warehouse, module: 'warehouse' },
             { path: '/inventory', label: 'Quản lý kho', icon: PackageOpen, module: 'inventory' },
             { path: '/stock-exports', label: 'Xuất kho', icon: LogOutIcon, module: 'stock_export' },
+            { path: '/stock-transfers', label: 'Điều chuyển kho', icon: ArrowRightLeft, module: 'stock_transfer' },
             { path: '/delivery', label: 'Vận chuyển', icon: Truck, module: 'delivery' },
         ]
     },
@@ -47,6 +48,7 @@ const PAGE_TITLES = {
     '/warehouse': 'Nhập kho',
     '/inventory': 'Quản lý kho',
     '/stock-exports': 'Xuất kho',
+    '/stock-transfers': 'Điều chuyển kho',
     '/delivery': 'Vận chuyển & Giao hàng',
     '/master-data': 'Danh mục dữ liệu',
     '/audit-trail': 'Audit Trail',

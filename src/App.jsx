@@ -22,6 +22,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const DeliveryPage = lazy(() => import('./pages/DeliveryPage'))
 const InventoryPage = lazy(() => import('./pages/InventoryPage'))
 const StockExportPage = lazy(() => import('./pages/StockExportPage'))
+const StockTransferPage = lazy(() => import('./pages/StockTransferPage'))
 
 function PageLoader() {
     return (
@@ -91,6 +92,9 @@ export default function App() {
                                             } />
                                             <Route path="/stock-exports" element={
                                                 <RoleGuard module="stock_export"><StockExportPage /></RoleGuard>
+                                            } />
+                                            <Route path="/stock-transfers" element={
+                                                <RoleGuard module="stock_transfer"><StockTransferPage /></RoleGuard>
                                             } />
                                             <Route path="/delivery" element={
                                                 <RoleGuard module="delivery"><DeliveryPage /></RoleGuard>

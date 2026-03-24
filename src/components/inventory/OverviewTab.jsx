@@ -46,7 +46,7 @@ function CSSPie({ data, size = 160 }) {
     )
 }
 
-export default function OverviewTab({ lots, productStock }) {
+export default function OverviewTab({ lots, productStock, onNavigateTab }) {
     const analysis = useMemo(() => {
         const totalQty = lots.reduce((s, l) => s + (l.quantity || 0), 0)
         const totalValue = Object.values(productStock).reduce((s, ps) => s + ps.totalValue, 0)
@@ -89,7 +89,10 @@ export default function OverviewTab({ lots, productStock }) {
             else expiryGroups['> 1 năm'] += l.quantity || 0
         })
 
-        return { totalQty, totalValue, expiredValue, nearExpiryValue, byCat, byMfr, expiryGroups }
+        const lowStockCount = Object.values(productStock).filter(ps => ps.hasLowStock).length
+        const productCount = Object.keys(productStock).length
+
+        return { totalQty, totalValue, expiredValue, nearExpiryValue, byCat, byMfr, expiryGroups, lowStockCount, productCount }
     }, [lots, productStock])
 
     const catColors = ['#6C5CE7', '#0984E3', '#00B894', '#FDCB6E', '#E17055', '#D63031', '#00CEC9', '#A29BFE']
@@ -102,17 +105,22 @@ export default function OverviewTab({ lots, productStock }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* KPI Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 'var(--space-3)' }}>
                 {[
                     { label: 'Giá trị tồn kho', value: formatCurrency(analysis.totalValue), color: '#6C5CE7', icon: '💰' },
                     { label: 'Số lượng tồn kho', value: analysis.totalQty.toLocaleString(), color: '#0984E3', icon: '📦' },
-                    { label: 'Giá trị hàng cận hạn', value: formatCurrency(analysis.nearExpiryValue), color: '#FDCB6E', icon: '⚠️' },
-                    { label: 'Giá trị hàng hết hạn', value: formatCurrency(analysis.expiredValue), color: '#D63031', icon: '⏰' },
+                    { label: 'Sản phẩm', value: analysis.productCount, color: '#00CEC9', icon: '🏷️' },
+                    { label: 'Tồn kho thấp', value: analysis.lowStockCount, color: '#E17055', icon: '⚠️', action: () => onNavigateTab?.('lots') },
+                    { label: 'Giá trị cận hạn', value: formatCurrency(analysis.nearExpiryValue), color: '#FDCB6E', icon: '⏳', action: () => onNavigateTab?.('expiry') },
+                    { label: 'Giá trị hết hạn', value: formatCurrency(analysis.expiredValue), color: '#D63031', icon: '⏰', action: () => onNavigateTab?.('expiry') },
                 ].map((s, i) => (
-                    <div key={i} className="card" style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.5rem' }}>{s.icon}</div>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
+                    <div key={i} className="card" style={{ padding: 'var(--space-3)', textAlign: 'center', cursor: s.action ? 'pointer' : 'default', transition: 'transform 0.15s' }}
+                        onClick={s.action} onMouseEnter={e => { if (s.action) e.currentTarget.style.transform = 'translateY(-2px)' }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = '' }}>
+                        <div style={{ fontSize: '1.25rem' }}>{s.icon}</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: s.color, marginTop: 2 }}>{s.value}</div>
                         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>{s.label}</div>
+                        {s.action && <div style={{ fontSize: '0.55rem', color: 'var(--text-tertiary)', marginTop: 2 }}>Click để xem chi tiết →</div>}
                     </div>
                 ))}
             </div>
@@ -141,11 +149,14 @@ export default function OverviewTab({ lots, productStock }) {
                 <h4 style={{ marginBottom: 'var(--space-3)', fontSize: 'var(--font-sm)' }}>📅 Tồn kho theo nhóm hạn sử dụng</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 'var(--space-3)' }}>
                     {Object.entries(analysis.expiryGroups).map(([label, value]) => (
-                        <div key={label} style={{
+                        <div key={label} onClick={() => onNavigateTab?.('expiry')} style={{
                             textAlign: 'center', padding: 'var(--space-3)',
                             background: `${expiryColors[label]}10`, borderRadius: 'var(--radius-md)',
                             border: `1px solid ${expiryColors[label]}30`,
-                        }}>
+                            cursor: 'pointer', transition: 'transform 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)' }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = '' }}>
                             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: expiryColors[label] }}>{value.toLocaleString()}</div>
                             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginTop: 2 }}>{label}</div>
                         </div>
