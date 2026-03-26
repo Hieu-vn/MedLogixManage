@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     subgraph "Frontend (React + Vite)"
-        UI["10 Pages + 16 Components"]
+        UI["14 Pages + 20 Components"]
         AUTH["Auth Context"]
         ROUTER["React Router"]
     end
@@ -45,7 +45,7 @@ flowchart TD
 | **Excel** | SheetJS (xlsx) | 0.18.5 | Import/export Price List |
 | **Deploy** | Vercel | — | CI/CD + CDN |
 
-## 3. Pages (10 trang)
+## 3. Pages (14 trang)
 
 | Trang | Route | File | Module |
 |---|---|---|---|
@@ -56,11 +56,15 @@ flowchart TD
 | Đặt hàng | `/purchase-orders` | `PurchaseOrderPage.jsx` | M3 |
 | Nhập khẩu | `/import-shipments` | `ImportShipmentPage.jsx` | M4 |
 | Nhập kho | `/warehouse` | `WarehouseReceiptPage.jsx` | M5 |
+| Giao hàng | `/delivery` | `DeliveryPage.jsx` | M6 |
+| Tồn kho | `/inventory` | `InventoryPage.jsx` | M5b |
+| Xuất kho | `/stock-exports` | `StockExportPage.jsx` | M5c |
+| Luân chuyển kho | `/stock-transfers` | `StockTransferPage.jsx` | M5d |
 | Master Data | `/master-data` | `MasterDataPage.jsx` | Chung |
 | Audit Trail | `/audit-trail` | `AuditTrailPage.jsx` | Chung |
 | Profile | `/profile` | `ProfilePage.jsx` | Chung |
 
-## 4. Components (16 tái sử dụng)
+## 4. Components (20 tái sử dụng)
 
 | Component | Chức năng |
 |---|---|
@@ -80,6 +84,10 @@ flowchart TD
 | **SkeletonLoader** | Loading placeholder |
 | **PageHeader** | Page title + action button |
 | **EmptyState** | No-data placeholder with illustration |
+| **ErrorBoundary** | React error boundary wrapper |
+| **OverviewTab** | Inventory overview tab (sub-component) |
+| **ExpiryTab** | Inventory expiry tracking tab (sub-component) |
+| **MovementsTab** | Inventory movements tab (sub-component) |
 
 ## 5. Database Schema
 

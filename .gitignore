@@ -18,13 +18,14 @@ Desktop.ini
 *.swp
 *.swo
 
-# Temp output files
-excel_output.txt
-excel_data.txt
-excel_data_full.txt
-sheet1_full.txt
+# Temp files
+*.tmp
+_cleanup.bat
+_read_excel.js
 
 # Logs
 *.log
 npm-debug.log*
+
+# Vercel
 .vercel

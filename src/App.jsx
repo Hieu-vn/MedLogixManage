@@ -34,13 +34,13 @@ function PageLoader() {
 }
 
 function ProtectedRoute({ children }) {
-    const { user, loading } = useAuth()
+    const { user, profile, loading } = useAuth()
 
-    if (loading) {
+    if (loading || (user && profile === undefined)) {
         return (
             <div className="loading-screen">
                 <div className="spinner"></div>
-                <p style={{ color: 'var(--text-secondary)' }}>Đang tải...</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Đang tải dữ liệu người dùng...</p>
             </div>
         )
     }
@@ -67,7 +67,9 @@ export default function App() {
                                     <Layout>
                                         <Routes>
                                             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                                            <Route path="/dashboard" element={<DashboardPage />} />
+                                            <Route path="/dashboard" element={
+                                                <RoleGuard module="dashboard"><DashboardPage /></RoleGuard>
+                                            } />
                                             <Route path="/profile" element={<ProfilePage />} />
                                             <Route path="/master-data" element={
                                                 <RoleGuard module="master_data"><MasterDataPage /></RoleGuard>

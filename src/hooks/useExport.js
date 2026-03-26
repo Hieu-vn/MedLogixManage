@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { ROBOTO_BASE64 } from '../lib/Roboto-Regular.js'
 
 /**
  * useExport — Reusable hook for exporting data to Excel and PDF
@@ -65,6 +66,11 @@ export function useExport() {
 
             const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
+            // Add Vietnamese Font
+            doc.addFileToVFS('Roboto-Regular.ttf', ROBOTO_BASE64)
+            doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal')
+            doc.setFont('Roboto')
+
             // Title
             doc.setFontSize(16)
             doc.text(title, 14, 15)
@@ -87,7 +93,7 @@ export function useExport() {
                 head,
                 body,
                 startY: 28,
-                styles: { fontSize: 8, cellPadding: 2 },
+                styles: { font: 'Roboto', fontSize: 8, cellPadding: 2 },
                 headStyles: {
                     fillColor: [108, 92, 231],
                     textColor: [255, 255, 255],

@@ -12,6 +12,7 @@ import PageHeader from '../components/PageHeader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
 import { generateCode, formatDate } from '../lib/helpers'
+import ConsumptionHistoryPanel from '../components/ConsumptionHistoryPanel'
 import { useExport } from '../hooks/useExport'
 import {
     Plus, Eye, Edit2, Trash2, Send, FileText,
@@ -104,10 +105,20 @@ export default function SalesForecastPage() {
         }
     }
 
-    async function handleApprove(forecast) {
+    async function handleApprove(forecast, editedQtys = {}) {
         // P3: Role guard — only authorized roles can approve
         if (!canApproveReject) { toast.error('Không có quyền duyệt phiếu'); return }
         try {
+            // G2: Persist any quantity edits made by QL Sales before approving
+            const items = forecast.sales_forecast_items || []
+            const qtyChanges = items.filter(item => editedQtys[item.id] && editedQtys[item.id] !== item.quantity)
+            if (qtyChanges.length > 0) {
+                await Promise.all(qtyChanges.map(item =>
+                    supabase.from('sales_forecast_items')
+                        .update({ quantity: editedQtys[item.id] })
+                        .eq('id', item.id)
+                ))
+            }
             const { error } = await supabase
                 .from('sales_forecasts')
                 .update({
@@ -118,7 +129,7 @@ export default function SalesForecastPage() {
                 })
                 .eq('id', forecast.id)
             if (error) throw error
-            toast.success(`Đã duyệt phiếu ${forecast.code}`)
+            toast.success(`Đã duyệt phiếu ${forecast.code}${qtyChanges.length > 0 ? ` (đã cập nhật ${qtyChanges.length} SL)` : ''}`)
             fetchForecasts()
             setViewModalOpen(false)
         } catch (err) {
@@ -811,11 +822,22 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
 function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, onReject }) {
     const [rejectReason, setRejectReason] = useState('')
     const [showRejectForm, setShowRejectForm] = useState(false)
+    // FR-1.3: Consumption history state
+    const [historyProduct, setHistoryProduct] = useState(null)
+    // G2: QL Sales có thể sửa SL khi duyệt
+    const [editedQtys, setEditedQtys] = useState({})
 
     if (!isOpen || !forecast) return null
 
     const items = forecast.sales_forecast_items || []
     const canApprove = isManager && forecast.status === 'pending'
+
+    // Initialize editedQtys from items each time modal opens
+    if (canApprove && Object.keys(editedQtys).length === 0 && items.length > 0) {
+        const init = {}
+        items.forEach(item => { init[item.id] = item.quantity })
+        setEditedQtys(init)
+    }
 
     return (
         <Modal
@@ -847,7 +869,7 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                             <button className="btn btn-danger" onClick={() => setShowRejectForm(true)}>
                                 <XCircle size={16} /> Từ chối
                             </button>
-                            <button className="btn btn-success" onClick={() => onApprove(forecast)}>
+                            <button className="btn btn-success" onClick={() => onApprove(forecast, editedQtys)}>
                                 <CheckCircle size={16} /> Duyệt phiếu
                             </button>
                         </>
@@ -908,9 +930,10 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                             <th>Quy cách ĐG</th>
                             <th style={{ width: '60px' }}>ĐVT</th>
                             <th>Bệnh viện</th>
-                            <th style={{ width: '80px' }}>SL</th>
+                            <th style={{ width: '80px' }}>SL {canApprove && <span style={{ color: 'var(--primary-400)', fontSize: 'var(--font-xs)' }}>(có thể sửa)</span>}</th>
                             <th style={{ width: '120px' }}>Ngày cần</th>
                             <th>Ghi chú</th>
+                            <th style={{ width: '40px' }}></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -925,14 +948,42 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                                 <td style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>{item.product?.packaging || '—'}</td>
                                 <td style={{ fontSize: 'var(--font-sm)' }}>{item.product?.unit || '—'}</td>
                                 <td>{item.hospital?.name || '—'}</td>
-                                <td style={{ fontWeight: 600, textAlign: 'center' }}>{item.quantity}</td>
+                                <td style={{ fontWeight: 600, textAlign: 'center' }}>
+                                    {canApprove ? (
+                                        <input
+                                            type="number"
+                                            className="form-input"
+                                            value={editedQtys[item.id] ?? item.quantity}
+                                            min={1}
+                                            onChange={e => setEditedQtys(prev => ({ ...prev, [item.id]: Number(e.target.value) || 1 }))}
+                                            style={{ width: 70, textAlign: 'center', padding: '3px 6px', fontSize: 'var(--font-sm)' }}
+                                        />
+                                    ) : item.quantity}
+                                </td>
                                 <td>{formatDate(item.needed_date)}</td>
                                 <td style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-xs)' }}>{item.notes || '—'}</td>
+                                <td>
+                                    <button className="btn btn-icon btn-ghost btn-sm" title="Lịch sử tiêu thụ"
+                                        onClick={() => setHistoryProduct(historyProduct?.id === item.product?.id ? null : { id: item.product?.id, name: item.product?.name })}
+                                        style={{ color: historyProduct?.id === item.product?.id ? 'var(--primary-400)' : 'var(--text-tertiary)' }}>
+                                        📊
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            {/* FR-1.3: Consumption History Panel */}
+            {historyProduct && (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                    <ConsumptionHistoryPanel
+                        productId={historyProduct.id}
+                        productName={historyProduct.name}
+                    />
+                </div>
+            )}
 
             {forecast.notes && (
                 <div style={{ marginTop: 'var(--space-4)', fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>

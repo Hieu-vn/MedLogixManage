@@ -14,6 +14,7 @@ export const queryClient = new QueryClient({
             gcTime: 5 * 60 * 1000,      // 5 minutes (formerly cacheTime)
             retry: 1,
             refetchOnWindowFocus: false, // Don't refetch when user switches tabs
+            throwOnError: true,          // Push fetch/auth errors to the nearest ErrorBoundary
         },
     },
 })

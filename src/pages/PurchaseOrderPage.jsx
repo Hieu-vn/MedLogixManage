@@ -142,12 +142,15 @@ export default function PurchaseOrderPage() {
                 unit_price: i.unit_price,
                 price_list_price: i.price_list_price,
                 price_deviation_pct: i.price_deviation_pct,
-            })) || [{ product_id: '', lot_number: '', expiry_date: '', quantity: 1, unit_price: 0, price_list_price: null, price_deviation_pct: 0 }]
+                pick_now_qty: i.pick_now_qty || i.quantity,
+                backorder_qty: i.backorder_qty || 0,
+                notes: i.notes || '',
+            })) || [{ product_id: '', lot_number: '', expiry_date: '', quantity: 1, unit_price: 0, price_list_price: null, price_deviation_pct: 0, pick_now_qty: 1, backorder_qty: 0, notes: '' }]
         )
         const [saving, setSaving] = useState(false)
 
         function addItem() {
-            setItems(prev => [...prev, { product_id: '', lot_number: '', expiry_date: '', quantity: 1, unit_price: 0, price_list_price: null, price_deviation_pct: 0 }])
+            setItems(prev => [...prev, { product_id: '', lot_number: '', expiry_date: '', quantity: 1, unit_price: 0, price_list_price: null, price_deviation_pct: 0, pick_now_qty: 1, backorder_qty: 0, notes: '' }])
         }
 
         function removeItem(idx) {
@@ -242,6 +245,9 @@ export default function PurchaseOrderPage() {
                     price_list_price: i.price_list_price,
                     price_deviation_pct: parseFloat(i.price_deviation_pct) || 0,
                     line_total: parseInt(i.quantity) * (parseFloat(i.unit_price) || 0),
+                    pick_now_qty: parseInt(i.pick_now_qty) || 0,
+                    backorder_qty: parseInt(i.backorder_qty) || 0,
+                    notes: i.notes || null,
                 }))
 
                 const { error: itemsErr } = await supabase.from('po_items').upsert(itemsData, {
@@ -317,6 +323,8 @@ export default function PurchaseOrderPage() {
                                         <th style={{ width: 100 }}>Lot No.</th>
                                         <th style={{ width: 110 }}>HSD</th>
                                         <th style={{ width: 70 }}>SL</th>
+                                        <th style={{ width: 70 }}>Pick</th>
+                                        <th style={{ width: 70 }}>BO</th>
                                         <th style={{ width: 110 }}>Đơn giá</th>
                                         <th style={{ width: 100 }}>Giá PL</th>
                                         <th style={{ width: 80 }}>Biến động</th>
@@ -348,7 +356,22 @@ export default function PurchaseOrderPage() {
                                                 <td><input type="date" className="form-input" value={item.expiry_date}
                                                     onChange={e => updateItem(idx, 'expiry_date', e.target.value)} /></td>
                                                 <td><input type="number" className="form-input" value={item.quantity} min="1"
-                                                    onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 1)} /></td>
+                                                    onChange={e => {
+                                                        const qty = parseInt(e.target.value) || 1
+                                                        updateItem(idx, 'quantity', qty)
+                                                        // Auto-update pick_now_qty to match, backorder to 0
+                                                        const updated = [...items]; updated[idx] = { ...updated[idx], quantity: qty, pick_now_qty: qty, backorder_qty: 0 }; setItems(updated)
+                                                    }} /></td>
+                                                <td><input type="number" className="form-input" value={item.pick_now_qty} min="0"
+                                                    max={item.quantity}
+                                                    onChange={e => {
+                                                        const pick = Math.min(parseInt(e.target.value) || 0, item.quantity)
+                                                        const updated = [...items]; updated[idx] = { ...updated[idx], pick_now_qty: pick, backorder_qty: item.quantity - pick }; setItems(updated)
+                                                    }}
+                                                    style={{ background: item.backorder_qty > 0 ? 'rgba(0,184,148,0.1)' : '' }} /></td>
+                                                <td><input type="number" className="form-input" value={item.backorder_qty} min="0"
+                                                    readOnly
+                                                    style={{ background: item.backorder_qty > 0 ? 'rgba(214,48,49,0.1)' : '', color: item.backorder_qty > 0 ? '#D63031' : '', fontWeight: item.backorder_qty > 0 ? 700 : 400 }} /></td>
                                                 <td>
                                                     <input type="number" className="form-input" value={item.unit_price}
                                                         onChange={e => updateItem(idx, 'unit_price', e.target.value)}
@@ -523,8 +546,8 @@ export default function PurchaseOrderPage() {
                         <thead>
                             <tr>
                                 <th>#</th><th>Code</th><th>Sản phẩm</th><th>ĐVT</th>
-                                <th>Lot</th><th>HSD</th><th>SL</th>
-                                <th>Đơn giá</th><th>Giá PL</th><th>Biến động</th><th>Thành tiền</th>
+                                <th>Lot</th><th>HSD</th><th>SL</th><th>Pick</th><th>BO</th>
+                                <th>Đơn giá</th><th>Giá PL</th><th>Biến động</th><th>Thành tiền</th><th>Ghi chú</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -540,6 +563,8 @@ export default function PurchaseOrderPage() {
                                         <td>{item.lot_number || '—'}</td>
                                         <td>{item.expiry_date ? formatDate(item.expiry_date) : '—'}</td>
                                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.quantity}</td>
+                                        <td style={{ textAlign: 'right', color: 'var(--accent-500)' }}>{item.pick_now_qty ?? item.quantity}</td>
+                                        <td style={{ textAlign: 'right', color: (item.backorder_qty || 0) > 0 ? '#D63031' : '', fontWeight: (item.backorder_qty || 0) > 0 ? 700 : 400 }}>{item.backorder_qty || 0}</td>
                                         <td style={{ textAlign: 'right' }}>{formatCurrency(item.unit_price)}</td>
                                         <td style={{ textAlign: 'right', color: 'var(--text-tertiary)' }}>
                                             {item.price_list_price ? formatCurrency(item.price_list_price) : '—'}
@@ -549,6 +574,7 @@ export default function PurchaseOrderPage() {
                                             {hasWarn && ' ⚠️'}
                                         </td>
                                         <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(item.line_total)}</td>
+                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>{item.notes || '—'}</td>
                                     </tr>
                                 )
                             })}

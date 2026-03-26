@@ -10,8 +10,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         persistSession: true,
         detectSessionInUrl: false,
         flowType: 'implicit',
-        // Disable Browser Lock API — prevents "AbortError: Lock broken" on
-        // Vercel deployments where cached HTML/service workers cause lock conflicts
-        lock: false,
     },
 })

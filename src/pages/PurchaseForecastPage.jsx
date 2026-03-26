@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
@@ -10,11 +10,16 @@ import PageHeader from '../components/PageHeader'
 import { StatusBadge, PriorityBadge } from '../components/Badges'
 import { usePurchaseForecasts } from '../hooks/useSupabaseQuery'
 import { generateCode, formatDate, formatCurrency, getExpiryWarning, calculatePriority, STORAGE_CONDITIONS, monthsBetween } from '../lib/helpers'
+import ConsumptionHistoryPanel from '../components/ConsumptionHistoryPanel'
 import {
     Plus, Eye, Send, ClipboardList, CheckCircle, XCircle,
     AlertTriangle, Package, ArrowRight, Zap, Download
 } from 'lucide-react'
 import { useExport } from '../hooks/useExport'
+
+// Business Rule: Safety buffer factor for purchase forecast calculation
+// Excel template uses ×1.2 (20% buffer) — configurable
+const SAFETY_BUFFER_FACTOR = 1.2
 
 export default function PurchaseForecastPage() {
     const { profile, isRole } = useAuth()
@@ -375,7 +380,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                         total_requested: item.quantity,
                         current_stock: currentStock,
                         near_expiry_qty: nearExpiryQty,
-                        qty_to_purchase: Math.max(0, item.quantity - currentStock),
+                        qty_to_purchase: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
                         earliest_needed_date: item.needed_date,
                         nearest_expiry: nearestExpiry,
                         priority: 'normal',
@@ -388,7 +393,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
 
         // Recalculate qty_to_purchase and priority
         const items = Array.from(itemMap.values()).map(item => {
-            item.qty_to_purchase = Math.max(0, item.total_requested - item.current_stock)
+            item.qty_to_purchase = Math.max(0, Math.round((item.total_requested - item.current_stock) * SAFETY_BUFFER_FACTOR))
             item.priority = calculatePriority(item.earliest_needed_date, item.current_stock, item.total_requested)
             return item
         })
@@ -601,6 +606,8 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
 // View Modal
 // ========================================
 function ViewPurchaseForecastModal({ isOpen, onClose, forecast, isLogistics, onApprove }) {
+    // FR-2.7: Consumption history state
+    const [historyProduct, setHistoryProduct] = useState(null)
     if (!isOpen || !forecast) return null
     const items = forecast.purchase_forecast_items || []
     const canApprove = isLogistics && forecast.status === 'pending'
@@ -652,6 +659,7 @@ function ViewPurchaseForecastModal({ isOpen, onClose, forecast, isLogistics, onA
                             <th style={{ width: '80px' }}>Ưu tiên</th>
                             <th>NCC</th>
                             <th style={{ width: '100px' }}>Ngày cần</th>
+                            <th style={{ width: '40px' }}></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -668,11 +676,28 @@ function ViewPurchaseForecastModal({ isOpen, onClose, forecast, isLogistics, onA
                                 <td><PriorityBadge priority={item.priority} /></td>
                                 <td style={{ fontSize: 'var(--font-sm)' }}>{item.supplier?.name || '—'}</td>
                                 <td style={{ fontSize: 'var(--font-xs)' }}>{formatDate(item.earliest_needed_date)}</td>
+                                <td>
+                                    <button className="btn btn-icon btn-ghost btn-sm" title="Lịch sử tiêu thụ"
+                                        onClick={() => setHistoryProduct(historyProduct?.id === item.product?.id ? null : { id: item.product?.id, name: item.product?.name })}
+                                        style={{ color: historyProduct?.id === item.product?.id ? 'var(--primary-400)' : 'var(--text-tertiary)' }}>
+                                        📊
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            {/* FR-2.7: Consumption History Panel */}
+            {historyProduct && (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                    <ConsumptionHistoryPanel
+                        productId={historyProduct.id}
+                        productName={historyProduct.name}
+                    />
+                </div>
+            )}
         </Modal>
     )
 }

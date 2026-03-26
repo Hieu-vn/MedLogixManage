@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth, ROLES } from '../lib/auth'
 import { useToast } from '../components/Toast'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
@@ -17,7 +18,23 @@ const TABS = [
 ]
 
 export default function MasterDataPage() {
+    const { isRole } = useAuth()
     const [activeTab, setActiveTab] = useState('products')
+
+    // Per-questionnaire (Câu hỏi hệ thống.pdf, Section 1g):
+    // Sales       → CRUD Bệnh viện/KH
+    // QL Logistics→ CRUD Sản phẩm, NCC, ĐV Vận chuyển, Bảng giá
+    // Admin       → full access including delete
+    // Others      → view-only
+    const canWriteForTab = {
+        products:   isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN),
+        hospitals:  isRole(ROLES.SALES, ROLES.ADMIN),
+        suppliers:  isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN),
+        carriers:   isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN),
+        price_list: isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN),
+    }
+    const canDelete = isRole(ROLES.ADMIN)
+    const canWrite  = canWriteForTab[activeTab] || false
     const [data, setData] = useState([])
     const [loading, setLoading] = useState(true)
     const [modalOpen, setModalOpen] = useState(false)
@@ -79,16 +96,19 @@ export default function MasterDataPage() {
     }, [activeTab, fetchData, fetchLookups])
 
     function handleAdd() {
+        if (!canWrite) { toast.warning('Bạn không có quyền thêm mới trong tab này'); return }
         setEditingItem(null)
         setModalOpen(true)
     }
 
     function handleEdit(item) {
+        if (!canWrite) { toast.warning('Bạn không có quyền chỉnh sửa trong tab này'); return }
         setEditingItem(item)
         setModalOpen(true)
     }
 
     async function handleDelete(item) {
+        if (!canDelete) { toast.warning('Chỉ Admin mới được xóa'); return }
         setDeleteTarget(item)
     }
 
@@ -357,9 +377,11 @@ export default function MasterDataPage() {
                                         </button>
                                     </>
                                 )}
+                                {canWrite && (
                                 <button className="btn btn-primary" onClick={handleAdd}>
                                     <Plus size={16} /> Thêm {tabConfig.label}
                                 </button>
+                                )}
                             </div>
                         }
                     />

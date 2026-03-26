@@ -42,7 +42,7 @@ export const MODULE_ACCESS = {
     stock_export: [ROLES.LOGISTICS_MANAGER, ROLES.WAREHOUSE_KEEPER, ROLES.DIRECTOR, ROLES.ADMIN],
     stock_transfer: [ROLES.LOGISTICS_MANAGER, ROLES.WAREHOUSE_KEEPER, ROLES.DIRECTOR, ROLES.ADMIN],
     delivery: [ROLES.LOGISTICS_MANAGER, ROLES.WAREHOUSE_KEEPER, ROLES.DIRECTOR, ROLES.ADMIN],
-    master_data: [ROLES.ADMIN],
+    master_data: [ROLES.SALES, ROLES.SALES_MANAGER, ROLES.LOGISTICS_MANAGER, ROLES.WAREHOUSE_KEEPER, ROLES.DIRECTOR, ROLES.ADMIN],
     audit_trail: [ROLES.DIRECTOR, ROLES.ADMIN],
 }
 
@@ -159,11 +159,16 @@ export function AuthProvider({ children }) {
     }
 
     async function signIn(email, password) {
+        setLoading(true)
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password,
         })
-        if (error) throw error
+        if (error) {
+            setLoading(false)
+            throw error
+        }
+        // Do NOT setLoading(false) here. onAuthStateChange will handle it after fetching profile.
         return data
     }
 
