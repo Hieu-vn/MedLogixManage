@@ -1,62 +1,33 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
+import { useProductConsumption, useHospitals } from '../hooks/useSupabaseQuery'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { TrendingUp, Calendar, Activity } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
 /**
- * ConsumptionHistoryPanel — shows 12-month consumption trend for a product
+ * ConsumptionHistoryPanel — shows 12-month consumption trend for a product using real delivery data
  * Props: productId (UUID), hospitalId? (UUID), productName (string)
  */
 export default function ConsumptionHistoryPanel({ productId, hospitalId, productName }) {
-    const [data, setData] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [hospitals, setHospitals] = useState([])
     const [selectedHospital, setSelectedHospital] = useState(hospitalId || 'all')
+    const { data: hospitals = [] } = useHospitals()
+    const { data = [], isLoading: loading } = useProductConsumption(productId, selectedHospital)
 
-    useEffect(() => {
-        fetchHospitals()
-    }, [])
-
-    useEffect(() => {
-        if (productId) fetchData()
-    }, [productId, selectedHospital])
-
-    async function fetchHospitals() {
-        const { data: h } = await supabase.from('hospitals').select('id, name').eq('is_active', true).order('name')
-        setHospitals(h || [])
-    }
-
-    async function fetchData() {
-        setLoading(true)
-        let query = supabase.from('mock_consumption')
-            .select('*, products(code, name), hospitals(name)')
-            .eq('product_id', productId)
-            .order('month', { ascending: true })
-
-        if (selectedHospital !== 'all') {
-            query = query.eq('hospital_id', selectedHospital)
-        }
-
-        const { data: result } = await query
-        setData(result || [])
-        setLoading(false)
-    }
-
-    // Aggregate by month (if all hospitals)
+    // Aggregate by month (if 'all' hospitals is selected, RPC returns breakdown by hospital)
     const chartData = (() => {
         const map = {}
         data.forEach(r => {
-            const month = new Date(r.month).toLocaleDateString('vi-VN', { month: 'short', year: '2-digit' })
-            if (!map[month]) map[month] = { month, delivered: 0, confirmed: 0 }
-            map[month].delivered += r.qty_delivered
-            map[month].confirmed += r.qty_confirmed
+            const dateObj = new Date(r.month)
+            const monthStr = dateObj.toLocaleDateString('vi-VN', { month: 'short', year: '2-digit' })
+            if (!map[monthStr]) map[monthStr] = { month: monthStr, delivered: 0, confirmed: 0 }
+            map[monthStr].delivered += Number(r.qty_delivered || 0)
+            map[monthStr].confirmed += Number(r.qty_confirmed || 0)
         })
         return Object.values(map)
     })()
 
     // Summary stats
-    const totalDelivered = data.reduce((s, r) => s + r.qty_delivered, 0)
-    const totalConfirmed = data.reduce((s, r) => s + r.qty_confirmed, 0)
+    const totalDelivered = data.reduce((s, r) => s + Number(r.qty_delivered || 0), 0)
+    const totalConfirmed = data.reduce((s, r) => s + Number(r.qty_confirmed || 0), 0)
     const avgMonthly = chartData.length ? (totalDelivered / chartData.length).toFixed(0) : 0
 
     if (!productId) return null
@@ -71,11 +42,11 @@ export default function ConsumptionHistoryPanel({ productId, hospitalId, product
                 <div>
                     <h3 style={{ margin: 0, fontSize: 'var(--font-base)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Activity size={18} style={{ color: 'var(--primary-400)' }} />
-                        Lịch sử tiêu thụ
+                        Lịch sử tiêu thụ (Thực tế)
                     </h3>
                     {productName && (
                         <p style={{ margin: '4px 0 0', fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>
-                            {productName} — 12 tháng gần nhất
+                            {productName} — Toàn thời gian
                         </p>
                     )}
                 </div>
@@ -96,7 +67,7 @@ export default function ConsumptionHistoryPanel({ productId, hospitalId, product
                 </div>
             ) : data.length === 0 ? (
                 <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-sm)', textAlign: 'center', padding: 'var(--space-4)' }}>
-                    Chưa có dữ liệu tiêu thụ cho sản phẩm này
+                    Chưa có dữ liệu tiêu thụ thực tế từ luồng Giao Hàng (M6) cho sản phẩm này
                 </p>
             ) : (
                 <>
@@ -142,19 +113,19 @@ export default function ConsumptionHistoryPanel({ productId, hospitalId, product
                     {/* Data table (collapsible) */}
                     <details style={{ fontSize: 'var(--font-xs)' }}>
                         <summary style={{ cursor: 'pointer', color: 'var(--primary-400)', fontWeight: 500, marginBottom: 'var(--space-2)' }}>
-                            📋 Xem chi tiết ({data.length} bản ghi)
+                            📋 Xem chi tiết ({data.length} bản ghi nhóm theo Tháng/BV)
                         </summary>
                         <table className="data-table" style={{ fontSize: 'var(--font-xs)' }}>
                             <thead>
-                                <tr><th>Tháng</th><th>Bệnh viện</th><th>SL Giao</th><th>SL XN</th><th>Ghi chú</th></tr>
+                                <tr><th>Tháng</th><th>Bệnh viện</th><th>SL Giao</th><th>SL XN</th><th>Ghi chú nổi bật</th></tr>
                             </thead>
                             <tbody>
-                                {data.map(r => (
-                                    <tr key={r.id}>
+                                {data.map((r, i) => (
+                                    <tr key={`${r.month}-${i}`}>
                                         <td>{new Date(r.month).toLocaleDateString('vi-VN', { month: '2-digit', year: 'numeric' })}</td>
-                                        <td>{r.hospitals?.name}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{r.qty_delivered}</td>
-                                        <td style={{ textAlign: 'right' }}>{r.qty_confirmed}</td>
+                                        <td>{r.hospital_name || '—'}</td>
+                                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{Number(r.qty_delivered)}</td>
+                                        <td style={{ textAlign: 'right' }}>{Number(r.qty_confirmed)}</td>
                                         <td style={{ color: 'var(--text-tertiary)' }}>{r.notes || '—'}</td>
                                     </tr>
                                 ))}

@@ -101,6 +101,30 @@ export function useSalesForecasts(statusFilter, options = {}) {
 }
 
 // ========================
+// Analytics & Dashboard Hooks
+// ========================
+
+/** Real consumption trend using RPC */
+export function useProductConsumption(productId, hospitalId, options = {}) {
+    return useQuery({
+        queryKey: ['product_consumption', productId, hospitalId],
+        queryFn: async () => {
+            const params = { p_product_id: productId }
+            if (hospitalId && hospitalId !== 'all') {
+                params.p_hospital_id = hospitalId
+            }
+            const { data, error } = await supabase.rpc('get_product_consumption', params)
+            if (error) throw error
+            return data || []
+        },
+        enabled: !!productId,
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    })
+}
+
+
+// ========================
 // Dashboard Hooks
 // ========================
 
@@ -109,18 +133,7 @@ export function useDashboardData(options = {}) {
     return useQuery({
         queryKey: ['dashboard'],
         queryFn: async () => {
-            const [
-                { data: salesForecasts },
-                { data: purchaseForecasts },
-                { data: products },
-                { data: inventoryLots },
-                { count: hospitalCount },
-                { count: supplierCount },
-                { data: recentSF },
-                { data: purchaseOrders },
-                { data: importShipments },
-                { data: warehouseReceipts },
-            ] = await Promise.all([
+            const results = await Promise.all([
                 supabase.from('sales_forecasts').select('id, status'),
                 supabase.from('purchase_forecasts').select('id, status'),
                 supabase.from('products').select('id, name, code, storage_condition, safety_stock_qty, is_active, category'),
@@ -133,7 +146,27 @@ export function useDashboardData(options = {}) {
                 supabase.from('purchase_orders').select('id, status, code, expected_delivery'),
                 supabase.from('import_shipments').select('id, status'),
                 supabase.from('warehouse_receipts').select('id, status'),
+                supabase.rpc('get_dashboard_trend'),
+                supabase.rpc('get_inventory_trend'),
             ])
+
+            const error = results.find(r => r.error)?.error
+            if (error) throw error
+
+            const [
+                { data: salesForecasts },
+                { data: purchaseForecasts },
+                { data: products },
+                { data: inventoryLots },
+                { count: hospitalCount },
+                { count: supplierCount },
+                { data: recentSF },
+                { data: purchaseOrders },
+                { data: importShipments },
+                { data: warehouseReceipts },
+                { data: monthlyTrend },
+                { data: inventoryTrend },
+            ] = results
 
             return {
                 salesForecasts: salesForecasts || [],
@@ -146,6 +179,8 @@ export function useDashboardData(options = {}) {
                 purchaseOrders: purchaseOrders || [],
                 importShipments: importShipments || [],
                 warehouseReceipts: warehouseReceipts || [],
+                monthlyTrend: monthlyTrend || [],
+                inventoryTrend: inventoryTrend || [],
             }
         },
         staleTime: 60 * 1000, // Dashboard: 60s freshness

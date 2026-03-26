@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, getExpiryWarning } from '../lib/helpers'
 import { StatusBadge } from '../components/Badges'
 import PageHeader from '../components/PageHeader'
 import SkeletonLoader from '../components/SkeletonLoader'
+import RoleGuard from '../components/RoleGuard'
 import {
     FileText, ClipboardList, ShoppingCart, Ship,
     Warehouse, AlertTriangle, ArrowRight,
@@ -115,7 +116,7 @@ export default function DashboardPage() {
     const stats = React.useMemo(() => {
         if (!raw) return null
         const { salesForecasts: sf, purchaseForecasts: pf, products: prods, inventoryLots: lots,
-            hospitalCount, supplierCount, recentSF, purchaseOrders: po, importShipments: nk, warehouseReceipts: wr } = raw
+            hospitalCount, supplierCount, recentSF, purchaseOrders: po, importShipments: nk, warehouseReceipts: wr, monthlyTrend: mtRaw, inventoryTrend: itRaw } = raw
 
         const pendingCount = sf.filter(f => f.status === 'pending').length
             + pf.filter(f => f.status === 'pending').length
@@ -193,8 +194,18 @@ export default function DashboardPage() {
             .sort((a, b) => b.qty - a.qty)
             .slice(0, 8)
 
-        // Monthly trend placeholder
-        const monthlyTrend = []
+        // Format real monthly trend
+        const monthlyTrend = (mtRaw || []).map(r => ({
+            month: new Date(r.month).toLocaleDateString('vi-VN', { month: 'short', year: '2-digit' }),
+            qty: Number(r.qty)
+        }))
+
+        // Format real inventory trend
+        const inventoryTrend = (itRaw || []).map(r => ({
+            date: new Date(r.snapshot_date).toLocaleDateString('vi-VN', { month: 'numeric', day: 'numeric' }),
+            value: Number(r.total_value),
+            items: Number(r.total_items)
+        }))
 
         return {
             pendingCount,
@@ -202,7 +213,7 @@ export default function DashboardPage() {
             totalHospitals: hospitalCount,
             totalSuppliers: supplierCount,
             expiryAlerts, lowStockProducts, pipeline, storagePie,
-            categoryData, topProducts, monthlyTrend,
+            categoryData, topProducts, monthlyTrend, inventoryTrend,
             recentSF, expiryCount90, stockValue, totalLots,
             totalPO: po.length, totalNK: nk.length, totalWR: wr.length,
         }
@@ -291,25 +302,46 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                <div className="card">
-                    <div className="card-header">
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <TrendingUp size={16} style={{ color: '#0984E3' }} /> Xu hướng giá trị tồn kho
-                        </h3>
-                    </div>
-                    <div className="card-body" style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        <TrendingUp size={40} style={{ color: 'var(--text-quaternary)', opacity: 0.5 }} />
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Chưa đủ dữ liệu lịch sử</div>
-                            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)', maxWidth: 280 }}>
-                                Biểu đồ xu hướng sẽ hiển thị khi hệ thống có dữ liệu nhập/xuất kho từ ≥ 3 tháng.
-                            </div>
+                <RoleGuard module="inventory">
+                    <div className="card">
+                        <div className="card-header">
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <TrendingUp size={16} style={{ color: '#0984E3' }} /> Xu hướng giá trị tồn kho
+                            </h3>
                         </div>
-                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--primary-400)', fontWeight: 500 }}>
-                            Giá trị tồn kho hiện tại: {formatCurrency(stats.stockValue)}
+                        <div className="card-body" style={{ height: 260 }}>
+                            {stats.inventoryTrend.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={stats.inventoryTrend} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="invGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#0984E3" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#0984E3" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" vertical={false} />
+                                        <XAxis dataKey="date" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        <YAxis hide domain={['dataMin - (dataMin * 0.05)', 'dataMax + (dataMax * 0.05)']} />
+                                        <Tooltip 
+                                            contentStyle={TOOLTIP_STYLE} 
+                                            formatter={(value, name) => [name === 'value' ? formatCurrency(value) : value, name === 'value' ? 'Giá trị tồn' : 'Số lượng']}
+                                        />
+                                        <Area type="monotone" dataKey="value" name="value" stroke="#0984E3" strokeWidth={3}
+                                            fillOpacity={1} fill="url(#invGradient)" activeDot={{ r: 6, fill: '#0984E3', stroke: '#fff', strokeWidth: 2 }} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                    <TrendingUp size={40} style={{ color: 'var(--text-quaternary)', opacity: 0.5 }} />
+                                    <div style={{ textAlign: 'center' }}>
+                                        <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Chưa đủ dữ liệu lịch sử</div>
+                                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Hệ thống đang thu thập snapshot hàng ngày</div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
-                </div>
+                </RoleGuard>
             </div>
 
             {/* Charts Row 2: Top products + Storage Pie */}

@@ -31,8 +31,8 @@ export default function PurchaseForecastPage() {
     const [viewingForecast, setViewingForecast] = useState(null)
     const [statusFilter, setStatusFilter] = useState('all')
 
-    // P4: Correct permission flags — director can approve but not create/submit
-    const canManage = isRole(ROLES.LOGISTICS_MANAGER, ROLES.ADMIN)
+    // BUG FIXED: QL Sales is allowed to create Purchase Forecast from Sales Forecasts
+    const canManage = isRole(ROLES.SALES_MANAGER, ROLES.LOGISTICS_MANAGER, ROLES.ADMIN)
     const canApprove = isRole(ROLES.LOGISTICS_MANAGER, ROLES.DIRECTOR, ROLES.ADMIN)
     const { exportExcel, exportPDF } = useExport()
 
@@ -381,6 +381,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                         current_stock: currentStock,
                         near_expiry_qty: nearExpiryQty,
                         qty_to_purchase: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
+                        system_suggested_qty: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
                         earliest_needed_date: item.needed_date,
                         nearest_expiry: nearestExpiry,
                         priority: 'normal',
@@ -393,7 +394,9 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
 
         // Recalculate qty_to_purchase and priority
         const items = Array.from(itemMap.values()).map(item => {
-            item.qty_to_purchase = Math.max(0, Math.round((item.total_requested - item.current_stock) * SAFETY_BUFFER_FACTOR))
+            const suggested = Math.max(0, Math.round((item.total_requested - item.current_stock) * SAFETY_BUFFER_FACTOR))
+            item.qty_to_purchase = suggested
+            item.system_suggested_qty = suggested
             item.priority = calculatePriority(item.earliest_needed_date, item.current_stock, item.total_requested)
             return item
         })
@@ -435,6 +438,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                 total_requested: item.total_requested,
                 current_stock: item.current_stock,
                 qty_to_purchase: item.qty_to_purchase,
+                system_suggested_qty: item.system_suggested_qty,
                 priority: item.priority,
                 earliest_needed_date: item.earliest_needed_date,
                 notes: item.notes,
@@ -572,6 +576,12 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                                             <input type="number" className="form-input" value={item.qty_to_purchase} min={0}
                                                 onChange={(e) => updateItem(i, 'qty_to_purchase', Number(e.target.value))}
                                                 style={{ fontSize: 'var(--font-xs)', padding: '3px 6px', textAlign: 'center', fontWeight: 700, color: 'var(--accent-500)' }} />
+                                            {item.system_suggested_qty !== undefined && (
+                                                <div style={{ fontSize: '0.6rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 2 }}
+                                                     title={`Gợi ý tự động của AI = (Yêu cầu - Tồn kho) * ${SAFETY_BUFFER_FACTOR}`}>
+                                                    Đề xuất: <strong style={{ color: item.qty_to_purchase !== item.system_suggested_qty ? '#D63031' : 'inherit' }}>{item.system_suggested_qty}</strong>
+                                                </div>
+                                            )}
                                         </td>
                                         <td>
                                             <select className="form-select" value={item.priority}
