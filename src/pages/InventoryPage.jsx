@@ -101,17 +101,6 @@ export default function InventoryPage() {
         { key: 'status', label: 'Trạng thái', exportRender: v => STATUS_CONFIG[v]?.label || v },
     ]
 
-    const tabStyle = (key) => ({
-        padding: 'var(--space-2) var(--space-4)',
-        background: activeTab === key ? 'var(--primary)' : 'transparent',
-        color: activeTab === key ? '#fff' : 'var(--text-secondary)',
-        border: 'none', borderRadius: 'var(--radius-md)',
-        cursor: 'pointer', fontWeight: activeTab === key ? 700 : 500,
-        fontSize: 'var(--font-sm)',
-        display: 'flex', alignItems: 'center', gap: 6,
-        transition: 'all 0.2s ease',
-    })
-
     return (
         <div>
             <PageHeader
@@ -131,14 +120,9 @@ export default function InventoryPage() {
             />
 
             {/* Tab Navigation */}
-            <div style={{
-                display: 'flex', gap: 'var(--space-1)',
-                padding: 'var(--space-1)', background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-4)',
-                width: 'fit-content',
-            }}>
+            <div className="segmented-control" style={{ marginBottom: 'var(--space-4)' }}>
                 {TABS.map(tab => (
-                    <button key={tab.key} style={tabStyle(tab.key)} onClick={() => setActiveTab(tab.key)}>
+                    <button key={tab.key} className={`segmented-btn ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
                         <tab.icon size={14} /> {tab.label}
                     </button>
                 ))}

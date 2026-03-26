@@ -2,7 +2,8 @@
  * Re-export date utilities from dateUtils.js (single source of truth)
  * This ensures all existing `import { formatDate } from '../lib/helpers'` still work.
  */
-export { formatDate, formatDateTime, daysBetween } from './dateUtils'
+import { formatDate, formatDateTime, daysBetween } from './dateUtils'
+export { formatDate, formatDateTime, daysBetween }
 
 /**
  * Cached Intl formatters (singleton pattern — created once, reused forever)

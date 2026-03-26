@@ -291,17 +291,6 @@ export default function StockTransferPage() {
     const canManage = isRole('logistics_manager') || isRole('admin')
     const canApprove = isRole('logistics_manager') || isRole('director') || isRole('admin')
 
-    const tabStyle = (key) => ({
-        padding: 'var(--space-2) var(--space-4)',
-        background: activeTab === key ? 'var(--primary)' : 'transparent',
-        color: activeTab === key ? '#fff' : 'var(--text-secondary)',
-        border: 'none', borderRadius: 'var(--radius-md)',
-        cursor: 'pointer', fontWeight: activeTab === key ? 700 : 500,
-        fontSize: 'var(--font-sm)',
-        display: 'flex', alignItems: 'center', gap: 6,
-        transition: 'all 0.2s ease',
-    })
-
     const currentList = activeTab === 'requests' ? filteredRequests : filteredTransfers
     const statusOptions = activeTab === 'requests'
         ? ['all', 'pending', 'approved', 'rejected', 'completed']
@@ -321,16 +310,12 @@ export default function StockTransferPage() {
             />
 
             {/* Tab Navigation */}
-            <div style={{
-                display: 'flex', gap: 'var(--space-1)', padding: 'var(--space-1)',
-                background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
-                marginBottom: 'var(--space-4)', width: 'fit-content',
-            }}>
+            <div className="segmented-control" style={{ marginBottom: 'var(--space-4)' }}>
                 {TABS.map(tab => (
-                    <button key={tab.key} style={tabStyle(tab.key)} onClick={() => { setActiveTab(tab.key); setStatusFilter('all') }}>
+                    <button key={tab.key} className={`segmented-btn ${activeTab === tab.key ? 'active' : ''}`} onClick={() => { setActiveTab(tab.key); setStatusFilter('all') }}>
                         <tab.icon size={14} /> {tab.label}
                         <span style={{
-                            background: activeTab === tab.key ? 'rgba(255,255,255,0.2)' : 'var(--bg-tertiary)',
+                            background: activeTab === tab.key ? 'rgba(255,255,255,0.2)' : 'var(--bg-card)',
                             padding: '1px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-xs)',
                         }}>
                             {tab.key === 'requests' ? requests.length : transfers.length}

@@ -315,26 +315,18 @@ export default function MasterDataPage() {
             />
 
             {/* Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: 'var(--space-1)',
-                marginBottom: 'var(--space-4)',
-                borderBottom: '1px solid var(--border-secondary)',
-                paddingBottom: 'var(--space-1)',
-                flexWrap: 'wrap',
-            }}>
+            <div className="segmented-control" style={{ marginBottom: 'var(--space-4)' }}>
                 {TABS.map(tab => (
                     <button
                         key={tab.key}
-                        className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-ghost'}`}
+                        className={`segmented-btn ${activeTab === tab.key ? 'active' : ''}`}
                         onClick={() => { setActiveTab(tab.key); setHistoryPanel(null) }}
-                        style={{ borderRadius: 'var(--radius-md) var(--radius-md) 0 0' }}
                     >
                         <tab.icon size={16} />
                         {tab.label}
                         <span style={{
                             fontSize: 'var(--font-xs)',
-                            background: activeTab === tab.key ? 'rgba(255,255,255,0.2)' : 'var(--bg-tertiary)',
+                            background: activeTab === tab.key ? 'rgba(255,255,255,0.2)' : 'var(--bg-card)',
                             padding: '1px 6px',
                             borderRadius: 'var(--radius-full)',
                         }}>

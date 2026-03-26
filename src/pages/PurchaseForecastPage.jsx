@@ -346,69 +346,74 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
     }
 
     function consolidate() {
-        const itemMap = new Map()
+        try {
+            const itemMap = new Map()
 
-        for (const sf of selectedSFs) {
-            for (const item of (sf.sales_forecast_items || [])) {
-                const key = item.product?.id
-                if (!key) continue
+            for (const sf of selectedSFs) {
+                for (const item of (sf.sales_forecast_items || [])) {
+                    const key = item.product?.id
+                    if (!key) continue
 
-                if (itemMap.has(key)) {
-                    const existing = itemMap.get(key)
-                    existing.total_requested += item.quantity
-                    if (item.needed_date < existing.earliest_needed_date) {
-                        existing.earliest_needed_date = item.needed_date
+                    if (itemMap.has(key)) {
+                        const existing = itemMap.get(key)
+                        existing.total_requested += item.quantity
+                        if (item.needed_date < existing.earliest_needed_date) {
+                            existing.earliest_needed_date = item.needed_date
+                        }
+                    } else {
+                        // Calculate current stock from inventory lots
+                        // FR-2.2: Loại bỏ lô có HSD < 8 tháng khỏi tồn kho khả dụng
+                        const allLots = inventoryLots.filter(l => l.product_id === key)
+                        const usableLots = allLots.filter(l => {
+                            if (!l.expiry_date) return true
+                            return monthsBetween(new Date(), l.expiry_date) >= 8
+                        })
+                        const currentStock = usableLots.reduce((sum, l) => sum + l.quantity, 0)
+                        const nearExpiry = allLots.filter(l => l.expiry_date && monthsBetween(new Date(), l.expiry_date) < 8)
+                        const nearExpiryQty = nearExpiry.reduce((sum, l) => sum + l.quantity, 0)
+                        const nearestExpiry = allLots.length > 0
+                            ? allLots.reduce((min, l) => l.expiry_date && l.expiry_date < min ? l.expiry_date : min, allLots[0]?.expiry_date || null)
+                            : null
+
+                        itemMap.set(key, {
+                            product_id: key,
+                            product: item.product,
+                            total_requested: item.quantity,
+                            current_stock: currentStock,
+                            near_expiry_qty: nearExpiryQty,
+                            qty_to_purchase: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
+                            system_suggested_qty: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
+                            earliest_needed_date: item.needed_date,
+                            nearest_expiry: nearestExpiry,
+                            priority: 'normal',
+                            supplier_id: '',
+                            notes: '',
+                        })
                     }
-                } else {
-                    // Calculate current stock from inventory lots
-                    // FR-2.2: Loại bỏ lô có HSD < 8 tháng khỏi tồn kho khả dụng
-                    const allLots = inventoryLots.filter(l => l.product_id === key)
-                    const usableLots = allLots.filter(l => {
-                        if (!l.expiry_date) return true
-                        return monthsBetween(new Date(), l.expiry_date) >= 8
-                    })
-                    const currentStock = usableLots.reduce((sum, l) => sum + l.quantity, 0)
-                    const nearExpiry = allLots.filter(l => l.expiry_date && monthsBetween(new Date(), l.expiry_date) < 8)
-                    const nearExpiryQty = nearExpiry.reduce((sum, l) => sum + l.quantity, 0)
-                    const nearestExpiry = allLots.length > 0
-                        ? allLots.reduce((min, l) => l.expiry_date && l.expiry_date < min ? l.expiry_date : min, allLots[0]?.expiry_date || null)
-                        : null
-
-                    itemMap.set(key, {
-                        product_id: key,
-                        product: item.product,
-                        total_requested: item.quantity,
-                        current_stock: currentStock,
-                        near_expiry_qty: nearExpiryQty,
-                        qty_to_purchase: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
-                        system_suggested_qty: Math.max(0, Math.round((item.quantity - currentStock) * SAFETY_BUFFER_FACTOR)),
-                        earliest_needed_date: item.needed_date,
-                        nearest_expiry: nearestExpiry,
-                        priority: 'normal',
-                        supplier_id: '',
-                        notes: '',
-                    })
                 }
             }
+
+            // Recalculate qty_to_purchase and priority
+            const items = Array.from(itemMap.values()).map(item => {
+                const suggested = Math.max(0, Math.round((item.total_requested - item.current_stock) * SAFETY_BUFFER_FACTOR))
+                item.qty_to_purchase = suggested
+                item.system_suggested_qty = suggested
+                item.priority = calculatePriority(item.earliest_needed_date, item.current_stock, item.total_requested)
+                return item
+            })
+
+            // Sort by priority: urgent first
+            items.sort((a, b) => {
+                const order = { urgent: 0, normal: 1, low: 2 }
+                return (order[a.priority] || 1) - (order[b.priority] || 1)
+            })
+
+            setConsolidatedItems(items)
+            setStep(2)
+        } catch (error) {
+            console.error('Consolidate error:', error);
+            alert('Lỗi tính toán tổng hợp: ' + error.message);
         }
-
-        // Recalculate qty_to_purchase and priority
-        const items = Array.from(itemMap.values()).map(item => {
-            const suggested = Math.max(0, Math.round((item.total_requested - item.current_stock) * SAFETY_BUFFER_FACTOR))
-            item.qty_to_purchase = suggested
-            item.system_suggested_qty = suggested
-            item.priority = calculatePriority(item.earliest_needed_date, item.current_stock, item.total_requested)
-            return item
-        })
-
-        // Sort by priority: urgent first
-        items.sort((a, b) => {
-            const order = { urgent: 0, normal: 1, low: 2 }
-            return (order[a.priority] || 1) - (order[b.priority] || 1)
-        })
-
-        setConsolidatedItems(items)
-        setStep(2)
     }
 
     function updateItem(index, key, value) {
