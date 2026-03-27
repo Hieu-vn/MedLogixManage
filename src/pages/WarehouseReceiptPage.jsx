@@ -385,7 +385,7 @@ export default function WarehouseReceiptPage() {
                         </div>
                         <div>
                             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người nhận</div>
-                            <div>{receipt.received_by_profile?.full_name}</div>
+                            <div>{'—'}</div>
                         </div>
                     </div>
 

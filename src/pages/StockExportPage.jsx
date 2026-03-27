@@ -376,7 +376,7 @@ export default function StockExportPage() {
                         </div>
                         <div>
                             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người yêu cầu</div>
-                            <div>{stockExport.requested_by_profile?.full_name || '—'}</div>
+                            <div>{'—'}</div>
                         </div>
                     </div>
 
@@ -560,7 +560,7 @@ export default function StockExportPage() {
                                         <td>{se.hospital?.name || '—'}</td>
                                         <td>{formatDate(se.export_date)}</td>
                                         <td style={{ textAlign: 'center' }}>{se.stock_export_items?.length || 0}</td>
-                                        <td>{se.requested_by_profile?.full_name || '—'}</td>
+                                        <td>{'—'}</td>
                                         <td>
                                             <span className="status-badge" style={{
                                                 background: `${stCfg.color}20`, color: stCfg.color,

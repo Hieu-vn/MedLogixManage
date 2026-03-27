@@ -490,7 +490,7 @@ export default function DeliveryPage() {
                         </div>
                         <div>
                             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người tạo</div>
-                            <div>{delivery.created_by_profile?.full_name || '—'}</div>
+                            <div>{'—'}</div>
                         </div>
                         <div>
                             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Biên bản giao nhận</div>

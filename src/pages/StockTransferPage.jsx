@@ -14,13 +14,13 @@ import { supabase } from '../lib/supabase'
 import { useQueryClient } from '@tanstack/react-query'
 
 const STATUS_CONFIG = {
-    pending:      { label: 'Chờ duyệt',     color: '#FDCB6E', icon: '⏳' },
-    approved:     { label: 'Đã duyệt',      color: '#00B894', icon: '✅' },
-    rejected:     { label: 'Từ chối',        color: '#D63031', icon: '❌' },
-    completed:    { label: 'Hoàn thành',     color: '#0984E3', icon: '📦' },
-    cancelled:    { label: 'Đã huỷ',        color: '#636E72', icon: '🚫' },
-    transferring: { label: 'Đang chuyển',    color: '#FDCB6E', icon: '🚚' },
-    partial:      { label: 'Chuyển 1 phần',  color: '#E17055', icon: '📦' },
+    pending: { label: 'Chờ duyệt', color: '#FDCB6E', icon: '⏳' },
+    approved: { label: 'Đã duyệt', color: '#00B894', icon: '✅' },
+    rejected: { label: 'Từ chối', color: '#D63031', icon: '❌' },
+    completed: { label: 'Hoàn thành', color: '#0984E3', icon: '📦' },
+    cancelled: { label: 'Đã huỷ', color: '#636E72', icon: '🚫' },
+    transferring: { label: 'Đang chuyển', color: '#FDCB6E', icon: '🚚' },
+    partial: { label: 'Chuyển 1 phần', color: '#E17055', icon: '📦' },
 }
 
 const TABS = [
@@ -94,8 +94,8 @@ export default function StockTransferPage() {
         const q = lotSearch.toLowerCase()
         return availableLots.filter(l =>
             (l.product?.code?.toLowerCase().includes(q) ||
-            l.product?.name?.toLowerCase().includes(q) ||
-            l.lot_number?.toLowerCase().includes(q)) &&
+                l.product?.name?.toLowerCase().includes(q) ||
+                l.lot_number?.toLowerCase().includes(q)) &&
             !formData.items.some(fi => fi.inventory_lot_id === l.id)
         ).slice(0, 10)
     }, [availableLots, lotSearch, formData.items])
@@ -383,8 +383,8 @@ export default function StockTransferPage() {
                                     ? item.stock_transfer_request_items || []
                                     : item.stock_transfer_items || []
                                 const personName = activeTab === 'requests'
-                                    ? item.requested_by_profile?.full_name
-                                    : item.transferred_by_profile?.full_name
+                                    ? '—'
+                                    : '—'
                                 const fromW = activeTab === 'transfers' ? item.request?.from_warehouse || item.from_warehouse : item.from_warehouse
                                 const toW = activeTab === 'transfers' ? item.request?.to_warehouse || item.to_warehouse : item.to_warehouse
 

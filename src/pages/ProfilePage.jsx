@@ -73,7 +73,8 @@ export default function ProfilePage() {
     if (!profile) return null
 
     const roleColor = ROLE_COLORS[profile.role] || '#636E72'
-    const initials = profile.full_name?.split(' ').map(n => n[0]).join('').slice(-2).toUpperCase() || '?'
+    const roleLabel = ROLE_LABELS[profile.role] || profile.role
+    const initials = roleLabel.split(' ').map(n => n[0]).join('').slice(-2).toUpperCase() || '?'
 
     const tabs = [
         { key: 'info', label: 'Thông tin', icon: User },
@@ -114,7 +115,7 @@ export default function ProfilePage() {
                             fontSize: '1.75rem', fontWeight: 700, color: '#fff',
                             boxShadow: `0 4px 16px ${roleColor}40`,
                         }}>{initials}</div>
-                        <h3 style={{ marginBottom: 'var(--space-1)' }}>{profile.full_name}</h3>
+                        <h3 style={{ marginBottom: 'var(--space-1)' }}>{roleLabel}</h3>
                         <div style={{
                             display: 'inline-block', padding: '4px 14px',
                             background: `${roleColor}20`, color: roleColor,
@@ -201,7 +202,7 @@ export default function ProfilePage() {
                                 ) : (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
                                         {[
-                                            { label: 'Họ tên', value: profile.full_name },
+                                            { label: 'Họ tên', value: roleLabel },
                                             { label: 'Email', value: profile.email || '—' },
                                             { label: 'Vai trò', value: ROLE_LABELS[profile.role] },
                                             { label: 'SĐT', value: profile.phone || 'Chưa cập nhật' },

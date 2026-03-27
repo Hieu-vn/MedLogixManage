@@ -35,7 +35,7 @@ export function useHospitals(options = {}) {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from('hospitals')
-                .select('id, name, code, is_active')
+                .select('id, name, is_active')
                 .eq('is_active', true)
                 .order('name')
             if (error) throw error

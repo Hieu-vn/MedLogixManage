@@ -76,7 +76,8 @@ export default function Layout({ children }) {
     }
 
     const currentPageTitle = PAGE_TITLES[location.pathname] || 'MedLogixManage'
-    const initials = profile?.full_name?.split(' ').map(n => n[0]).join('').slice(-2).toUpperCase() || '?'
+    const roleLabel = ROLE_LABELS[profile?.role] || profile?.role || 'User'
+    const initials = roleLabel.split(' ').map(n => n[0]).join('').slice(-2).toUpperCase() || '?'
 
     return (
         <div className={`app-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
@@ -135,7 +136,7 @@ export default function Layout({ children }) {
                         {!collapsed && (
                             <div className="sidebar-user-info" style={{ cursor: 'pointer' }}
                                 onClick={() => navigate('/profile')}>
-                                <div className="sidebar-user-name">{profile?.full_name || 'User'}</div>
+                                <div className="sidebar-user-name">{roleLabel}</div>
                                 <div className="sidebar-user-role">{ROLE_LABELS[profile?.role] || profile?.role}</div>
                             </div>
                         )}

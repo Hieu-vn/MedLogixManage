@@ -163,12 +163,12 @@ export default function SalesForecastPage() {
     const filteredForecasts = statusFilter === 'all'
         ? forecasts
         : statusFilter === 'stale'
-        ? forecasts.filter(f => {
-            if (f.status !== 'pending') return false
-            const days = Math.floor((Date.now() - new Date(f.updated_at || f.created_at).getTime()) / (1000 * 60 * 60 * 24))
-            return days > 3
-        })
-        : forecasts.filter(f => f.status === statusFilter)
+            ? forecasts.filter(f => {
+                if (f.status !== 'pending') return false
+                const days = Math.floor((Date.now() - new Date(f.updated_at || f.created_at).getTime()) / (1000 * 60 * 60 * 24))
+                return days > 3
+            })
+            : forecasts.filter(f => f.status === statusFilter)
 
     // Stale PR helper: pending > 3 days
     function getStaleDays(forecast) {
@@ -197,7 +197,7 @@ export default function SalesForecastPage() {
         },
         {
             key: 'creator', label: 'Người tạo', width: '140px',
-            render: (v) => v?.full_name || '—',
+            render: (v) => v?.full_name ? '—' : '—',
         },
         {
             key: 'request_date', label: 'Ngày tạo', sortable: true, width: '110px',
@@ -275,16 +275,16 @@ export default function SalesForecastPage() {
                         )}
                         <button className="btn btn-ghost" onClick={() => exportExcel(
                             [{ key: 'code', label: 'Mã phiếu' }, { key: 'title', label: 'Tiêu đề' },
-                             { key: 'purpose', label: 'Mục đích', exportRender: v => PR_PURPOSES.find(p => p.key === v)?.label || '' },
-                             { key: 'status', label: 'Trạng thái' }],
+                            { key: 'purpose', label: 'Mục đích', exportRender: v => PR_PURPOSES.find(p => p.key === v)?.label || '' },
+                            { key: 'status', label: 'Trạng thái' }],
                             filteredForecasts, 'du_tru_sales', 'Sales Forecast'
                         )}>
                             <Download size={14} /> Excel
                         </button>
                         <button className="btn btn-ghost" onClick={() => exportPDF(
                             [{ key: 'code', label: 'Mã phiếu' }, { key: 'title', label: 'Tiêu đề' },
-                             { key: 'purpose', label: 'Mục đích', exportRender: v => PR_PURPOSES.find(p => p.key === v)?.label || '' },
-                             { key: 'status', label: 'Trạng thái' }],
+                            { key: 'purpose', label: 'Mục đích', exportRender: v => PR_PURPOSES.find(p => p.key === v)?.label || '' },
+                            { key: 'status', label: 'Trạng thái' }],
                             filteredForecasts, 'Danh sách Dự Trù Sales', 'du_tru_sales'
                         )}>
                             <Download size={14} /> PDF
@@ -590,228 +590,228 @@ function ForecastFormModal({ isOpen, onClose, forecast, onSaved, profile }) {
 
     return (
         <>
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={forecast ? `Sửa phiếu: ${forecast.code}` : 'Tạo phiếu dự trù mới'}
-            size="xl"
-            footer={
-                <>
-                    <button className="btn btn-ghost" onClick={onClose}>Hủy</button>
-                    <button className="btn btn-primary" onClick={handleSubmit(onFormSubmit)} disabled={saving}>
-                        {saving ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> Đang lưu...</> : 'Lưu phiếu'}
+            <Modal
+                isOpen={isOpen}
+                onClose={onClose}
+                title={forecast ? `Sửa phiếu: ${forecast.code}` : 'Tạo phiếu dự trù mới'}
+                size="xl"
+                footer={
+                    <>
+                        <button className="btn btn-ghost" onClick={onClose}>Hủy</button>
+                        <button className="btn btn-primary" onClick={handleSubmit(onFormSubmit)} disabled={saving}>
+                            {saving ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> Đang lưu...</> : 'Lưu phiếu'}
+                        </button>
+                    </>
+                }
+            >
+                {/* Header Fields — react-hook-form */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                    <div className="form-group">
+                        <label className="form-label required">Tiêu đề phiếu</label>
+                        <input
+                            className={`form-input ${errors.title ? 'form-input-error' : ''}`}
+                            {...register('title', { required: 'Vui lòng nhập tiêu đề phiếu' })}
+                            placeholder="VD: Dự trù tháng 3/2026 - BV Đà Nẵng"
+                        />
+                        {errors.title && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.title.message}</span>}
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label required">Mục đích</label>
+                        <select className="form-input" {...register('purpose', { required: 'Chọn mục đích' })}>
+                            <option value="">-- Chọn mục đích --</option>
+                            {PR_PURPOSES.map(p => (
+                                <option key={p.key} value={p.key}>{p.icon} {p.label}</option>
+                            ))}
+                        </select>
+                        {errors.purpose && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.purpose.message}</span>}
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Ghi chú</label>
+                        <input
+                            className="form-input"
+                            {...register('notes')}
+                            placeholder="Ghi chú thêm..."
+                        />
+                    </div>
+                </div>
+
+                {/* Items Table */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                    <h4 style={{ fontSize: 'var(--font-md)' }}>
+                        <Package size={16} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+                        Danh sách sản phẩm ({items.length})
+                    </h4>
+                    <button className="btn btn-success btn-sm" onClick={addItem}>
+                        <Plus size={14} /> Thêm dòng
                     </button>
-                </>
-            }
-        >
-            {/* Header Fields — react-hook-form */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                <div className="form-group">
-                    <label className="form-label required">Tiêu đề phiếu</label>
-                    <input
-                        className={`form-input ${errors.title ? 'form-input-error' : ''}`}
-                        {...register('title', { required: 'Vui lòng nhập tiêu đề phiếu' })}
-                        placeholder="VD: Dự trù tháng 3/2026 - BV Đà Nẵng"
-                    />
-                    {errors.title && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.title.message}</span>}
                 </div>
-                <div className="form-group">
-                    <label className="form-label required">Mục đích</label>
-                    <select className="form-input" {...register('purpose', { required: 'Chọn mục đích' })}>
-                        <option value="">-- Chọn mục đích --</option>
-                        {PR_PURPOSES.map(p => (
-                            <option key={p.key} value={p.key}>{p.icon} {p.label}</option>
-                        ))}
-                    </select>
-                    {errors.purpose && <span style={{ color: '#E17055', fontSize: 'var(--font-xs)', marginTop: 4 }}>{errors.purpose.message}</span>}
-                </div>
-                <div className="form-group">
-                    <label className="form-label">Ghi chú</label>
-                    <input
-                        className="form-input"
-                        {...register('notes')}
-                        placeholder="Ghi chú thêm..."
-                    />
-                </div>
-            </div>
 
-            {/* Items Table */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
-                <h4 style={{ fontSize: 'var(--font-md)' }}>
-                    <Package size={16} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
-                    Danh sách sản phẩm ({items.length})
-                </h4>
-                <button className="btn btn-success btn-sm" onClick={addItem}>
-                    <Plus size={14} /> Thêm dòng
-                </button>
-            </div>
+                {items.length === 0 ? (
+                    <div style={{
+                        textAlign: 'center', padding: 'var(--space-8)',
+                        background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)',
+                        color: 'var(--text-tertiary)',
+                    }}>
+                        Chưa có sản phẩm nào. Click "Thêm dòng" để bắt đầu.
+                    </div>
+                ) : (
+                    <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '40px' }}>#</th>
+                                    <th>Sản phẩm</th>
+                                    <th style={{ width: '100px' }}>Hãng SX</th>
+                                    <th style={{ width: '100px' }}>Quy cách ĐG</th>
+                                    <th style={{ width: '60px' }}>ĐVT</th>
+                                    <th>Bệnh viện</th>
+                                    <th style={{ width: '90px' }}>Số lượng</th>
+                                    <th style={{ width: '140px' }}>Ngày cần hàng</th>
+                                    <th style={{ width: '160px' }}>Ghi chú</th>
+                                    <th style={{ width: '40px' }}></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item, index) => {
+                                    const isDuplicate = item.product_id && item.hospital_id && checkDuplicate(item.product_id, item.hospital_id, index)
+                                    return (
+                                        <tr key={index} style={isDuplicate ? { background: 'rgba(214,48,49,0.08)' } : {}}>
+                                            <td style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-xs)' }}>{index + 1}</td>
+                                            <td>
+                                                <select
+                                                    className="form-select"
+                                                    value={item.product_id}
+                                                    onChange={(e) => updateItem(index, 'product_id', e.target.value)}
+                                                    style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
+                                                >
+                                                    <option value="">Chọn SP...</option>
+                                                    {products.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+                                                    ))}
+                                                </select>
+                                                {isDuplicate && <div style={{ color: 'var(--red-400)', fontSize: '0.625rem', marginTop: '2px' }}>⚠ Trùng SP + BV</div>}
+                                            </td>
+                                            <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                                                {products.find(p => p.id === item.product_id)?.manufacturer || '—'}
+                                            </td>
+                                            <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                                                {products.find(p => p.id === item.product_id)?.packaging || '—'}
+                                            </td>
+                                            <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
+                                                {products.find(p => p.id === item.product_id)?.unit || '—'}
+                                            </td>
+                                            <td>
+                                                <select
+                                                    className="form-select"
+                                                    value={item.hospital_id}
+                                                    onChange={(e) => updateItem(index, 'hospital_id', e.target.value)}
+                                                    style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
+                                                >
+                                                    <option value="">Chọn BV...</option>
+                                                    {hospitals.map(h => (
+                                                        <option key={h.id} value={h.id}>{h.name}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="number"
+                                                    className="form-input"
+                                                    value={item.quantity}
+                                                    min={1}
+                                                    onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                                                    style={{ fontSize: 'var(--font-xs)', padding: '4px 8px', textAlign: 'center' }}
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="date"
+                                                    className="form-input"
+                                                    value={item.needed_date}
+                                                    onChange={(e) => updateItem(index, 'needed_date', e.target.value)}
+                                                    style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    className="form-input"
+                                                    value={item.notes || ''}
+                                                    onChange={(e) => updateItem(index, 'notes', e.target.value)}
+                                                    placeholder="..."
+                                                    style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
+                                                />
+                                            </td>
+                                            <td>
+                                                <button
+                                                    className="btn btn-icon btn-ghost btn-sm"
+                                                    onClick={() => removeItem(index)}
+                                                    style={{ color: 'var(--red-400)' }}
+                                                    title="Xóa dòng"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </Modal>
 
-            {items.length === 0 ? (
-                <div style={{
-                    textAlign: 'center', padding: 'var(--space-8)',
-                    background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-tertiary)',
-                }}>
-                    Chưa có sản phẩm nào. Click "Thêm dòng" để bắt đầu.
-                </div>
-            ) : (
-                <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style={{ width: '40px' }}>#</th>
-                                <th>Sản phẩm</th>
-                                <th style={{ width: '100px' }}>Hãng SX</th>
-                                <th style={{ width: '100px' }}>Quy cách ĐG</th>
-                                <th style={{ width: '60px' }}>ĐVT</th>
-                                <th>Bệnh viện</th>
-                                <th style={{ width: '90px' }}>Số lượng</th>
-                                <th style={{ width: '140px' }}>Ngày cần hàng</th>
-                                <th style={{ width: '160px' }}>Ghi chú</th>
-                                <th style={{ width: '40px' }}></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.map((item, index) => {
-                                const isDuplicate = item.product_id && item.hospital_id && checkDuplicate(item.product_id, item.hospital_id, index)
-                                return (
-                                    <tr key={index} style={isDuplicate ? { background: 'rgba(214,48,49,0.08)' } : {}}>
-                                        <td style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-xs)' }}>{index + 1}</td>
-                                        <td>
-                                            <select
-                                                className="form-select"
-                                                value={item.product_id}
-                                                onChange={(e) => updateItem(index, 'product_id', e.target.value)}
-                                                style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
-                                            >
-                                                <option value="">Chọn SP...</option>
-                                                {products.map(p => (
-                                                    <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
-                                                ))}
-                                            </select>
-                                            {isDuplicate && <div style={{ color: 'var(--red-400)', fontSize: '0.625rem', marginTop: '2px' }}>⚠ Trùng SP + BV</div>}
-                                        </td>
-                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
-                                            {products.find(p => p.id === item.product_id)?.manufacturer || '—'}
-                                        </td>
-                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
-                                            {products.find(p => p.id === item.product_id)?.packaging || '—'}
-                                        </td>
-                                        <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
-                                            {products.find(p => p.id === item.product_id)?.unit || '—'}
-                                        </td>
-                                        <td>
-                                            <select
-                                                className="form-select"
-                                                value={item.hospital_id}
-                                                onChange={(e) => updateItem(index, 'hospital_id', e.target.value)}
-                                                style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
-                                            >
-                                                <option value="">Chọn BV...</option>
-                                                {hospitals.map(h => (
-                                                    <option key={h.id} value={h.id}>{h.name}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="number"
-                                                className="form-input"
-                                                value={item.quantity}
-                                                min={1}
-                                                onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                                                style={{ fontSize: 'var(--font-xs)', padding: '4px 8px', textAlign: 'center' }}
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="date"
-                                                className="form-input"
-                                                value={item.needed_date}
-                                                onChange={(e) => updateItem(index, 'needed_date', e.target.value)}
-                                                style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                className="form-input"
-                                                value={item.notes || ''}
-                                                onChange={(e) => updateItem(index, 'notes', e.target.value)}
-                                                placeholder="..."
-                                                style={{ fontSize: 'var(--font-xs)', padding: '4px 8px' }}
-                                            />
-                                        </td>
-                                        <td>
-                                            <button
-                                                className="btn btn-icon btn-ghost btn-sm"
-                                                onClick={() => removeItem(index)}
-                                                style={{ color: 'var(--red-400)' }}
-                                                title="Xóa dòng"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
+            {/* FR-1.2: Cross-forecast duplicate warning */}
+            {duplicateWarning && duplicateWarning.length > 0 && (
+                <div className="modal-overlay" style={{ zIndex: 1100 }}>
+                    <div className="modal" style={{ maxWidth: 540 }}>
+                        <div className="modal-header">
+                            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <AlertTriangle size={20} style={{ color: '#FDCB6E' }} />
+                                Cảnh báo trùng lặp
+                            </h2>
+                            <button className="btn btn-icon btn-ghost" onClick={() => { setDuplicateWarning(null); setPendingSubmitData(null) }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <p style={{ marginBottom: 'var(--space-3)' }}>
+                                Các sản phẩm sau đã tồn tại trong phiếu dự trù khác:
+                            </p>
+                            <div className="table-container" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                                <table>
+                                    <thead><tr>
+                                        <th>Sản phẩm</th>
+                                        <th>Bệnh viện</th>
+                                        <th>Phiếu</th>
+                                        <th>Trạng thái</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {duplicateWarning.map((d, i) => (
+                                            <tr key={i}>
+                                                <td>{d.product?.code || '—'}</td>
+                                                <td>{d.hospital?.name || '—'}</td>
+                                                <td><strong>{d.forecast?.code}</strong></td>
+                                                <td><StatusBadge status={d.forecast?.status} /></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--font-sm)' }}>
+                                Bạn vẫn muốn tiếp tục lưu phiếu?
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-ghost" onClick={() => { setDuplicateWarning(null); setPendingSubmitData(null) }}>
+                                Quay lại sửa
+                            </button>
+                            <button className="btn btn-warning" onClick={confirmDuplicateAndSave}>
+                                <AlertTriangle size={14} /> Tiếp tục lưu
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
-        </Modal>
-
-        {/* FR-1.2: Cross-forecast duplicate warning */}
-        {duplicateWarning && duplicateWarning.length > 0 && (
-            <div className="modal-overlay" style={{ zIndex: 1100 }}>
-                <div className="modal" style={{ maxWidth: 540 }}>
-                    <div className="modal-header">
-                        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <AlertTriangle size={20} style={{ color: '#FDCB6E' }} />
-                            Cảnh báo trùng lặp
-                        </h2>
-                        <button className="btn btn-icon btn-ghost" onClick={() => { setDuplicateWarning(null); setPendingSubmitData(null) }}>
-                            <X size={18} />
-                        </button>
-                    </div>
-                    <div className="modal-body">
-                        <p style={{ marginBottom: 'var(--space-3)' }}>
-                            Các sản phẩm sau đã tồn tại trong phiếu dự trù khác:
-                        </p>
-                        <div className="table-container" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                            <table>
-                                <thead><tr>
-                                    <th>Sản phẩm</th>
-                                    <th>Bệnh viện</th>
-                                    <th>Phiếu</th>
-                                    <th>Trạng thái</th>
-                                </tr></thead>
-                                <tbody>
-                                    {duplicateWarning.map((d, i) => (
-                                        <tr key={i}>
-                                            <td>{d.product?.code || '—'}</td>
-                                            <td>{d.hospital?.name || '—'}</td>
-                                            <td><strong>{d.forecast?.code}</strong></td>
-                                            <td><StatusBadge status={d.forecast?.status} /></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <p style={{ marginTop: 'var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--font-sm)' }}>
-                            Bạn vẫn muốn tiếp tục lưu phiếu?
-                        </p>
-                    </div>
-                    <div className="modal-footer">
-                        <button className="btn btn-ghost" onClick={() => { setDuplicateWarning(null); setPendingSubmitData(null) }}>
-                            Quay lại sửa
-                        </button>
-                        <button className="btn btn-warning" onClick={confirmDuplicateAndSave}>
-                            <AlertTriangle size={14} /> Tiếp tục lưu
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
         </>
     )
 }
@@ -892,7 +892,7 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                 </div>
                 <div>
                     <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người tạo</div>
-                    <div style={{ fontWeight: 600 }}>{forecast.creator?.full_name || '—'}</div>
+                    <div style={{ fontWeight: 600 }}>{'—'}</div>
                 </div>
                 <div>
                     <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Ngày tạo</div>
@@ -911,7 +911,7 @@ function ForecastViewModal({ isOpen, onClose, forecast, isManager, onApprove, on
                 {forecast.approver && (
                     <div>
                         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người duyệt</div>
-                        <div style={{ fontWeight: 600 }}>{forecast.approver.full_name}</div>
+                        <div style={{ fontWeight: 600 }}>{'—'}</div>
                     </div>
                 )}
             </div>

@@ -228,7 +228,7 @@ export default function DashboardPage() {
         <div>
             <PageHeader
                 title="Dashboard"
-                subtitle={`Xin chào, ${profile?.full_name}! Tổng quan hệ thống hôm nay.`}
+                subtitle="Tổng quan hệ thống hôm nay"
                 icon={<LayoutDashboard size={20} />}
             />
 
@@ -514,7 +514,7 @@ export default function DashboardPage() {
                                     <code style={{ color: 'var(--primary-400)', fontSize: 11, fontWeight: 600 }}>{sf.code}</code>
                                     <span style={{ marginLeft: 8, color: 'var(--text-primary)' }}>{sf.title}</span>
                                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3 }}>
-                                        {sf.created_by?.full_name} • {formatDate(sf.request_date)}
+                                        {formatDate(sf.request_date)}
                                     </div>
                                 </div>
                                 <StatusBadge status={sf.status} />

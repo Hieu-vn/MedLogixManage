@@ -43,7 +43,7 @@ export default function PurchaseForecastPage() {
     const exportColumns = [
         { key: 'code', label: 'Mã phiếu' },
         { key: 'consolidation_date', label: 'Ngày TH', exportRender: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
-        { key: 'creator', label: 'Người tạo', exportRender: v => v?.full_name || '—' },
+        { key: 'creator', label: 'Người tạo', exportRender: v => '—' },
         { key: 'items_count', label: 'Số SP', exportRender: (_, r) => r.purchase_forecast_items?.length || 0 },
         { key: 'status', label: 'Trạng thái' },
     ]
@@ -118,9 +118,9 @@ export default function PurchaseForecastPage() {
                 .eq('is_current', true)
                 .in('supplier_id', allSupplierIds)
             const priceLookup = {}
-            ;(allPrices || []).forEach(p => {
-                priceLookup[`${p.product_id}_${p.supplier_id}`] = p.unit_price
-            })
+                ; (allPrices || []).forEach(p => {
+                    priceLookup[`${p.product_id}_${p.supplier_id}`] = p.unit_price
+                })
 
             for (const [supplierId, supplierItems] of Object.entries(bySupplier)) {
                 const suppData = suppLookup[supplierId]
@@ -200,7 +200,7 @@ export default function PurchaseForecastPage() {
             key: 'consolidation_date', label: 'Ngày tổng hợp', sortable: true, width: '120px',
             render: (v) => formatDate(v)
         },
-        { key: 'creator', label: 'Người tạo', width: '140px', render: (v) => v?.full_name || '—' },
+        { key: 'creator', label: 'Người tạo', width: '140px', render: (v) => '—' },
         {
             key: 'purchase_forecast_items', label: 'Số SP', width: '70px',
             render: (v) => <span style={{ background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-xs)', fontWeight: 600 }}>{v?.length || 0}</span>
@@ -572,7 +572,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                                             {/* FR-2.2/2.3: Cảnh báo lô HSD sắp hết */}
                                             {item.near_expiry_qty > 0 && (
                                                 <div style={{ fontSize: '0.6rem', color: '#D63031', marginTop: 1 }}
-                                                     title={`${item.near_expiry_qty} đvt tồn kho HSD < 8 tháng đã bị loại`}>
+                                                    title={`${item.near_expiry_qty} đvt tồn kho HSD < 8 tháng đã bị loại`}>
                                                     ⚠️ -{item.near_expiry_qty} HSD sát
                                                 </div>
                                             )}
@@ -583,7 +583,7 @@ function CreatePurchaseForecastModal({ isOpen, onClose, onCreated, profile }) {
                                                 style={{ fontSize: 'var(--font-xs)', padding: '3px 6px', textAlign: 'center', fontWeight: 700, color: 'var(--accent-500)' }} />
                                             {item.system_suggested_qty !== undefined && (
                                                 <div style={{ fontSize: '0.6rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 2 }}
-                                                     title={`Gợi ý tự động của AI = (Yêu cầu - Tồn kho) * ${SAFETY_BUFFER_FACTOR}`}>
+                                                    title={`Gợi ý tự động của AI = (Yêu cầu - Tồn kho) * ${SAFETY_BUFFER_FACTOR}`}>
                                                     Đề xuất: <strong style={{ color: item.qty_to_purchase !== item.system_suggested_qty ? '#D63031' : 'inherit' }}>{item.system_suggested_qty}</strong>
                                                 </div>
                                             )}
@@ -650,7 +650,7 @@ function ViewPurchaseForecastModal({ isOpen, onClose, forecast, isLogistics, onA
                 </div>
                 <div>
                     <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Người tạo</div>
-                    <div style={{ fontWeight: 600 }}>{forecast.creator?.full_name || '—'}</div>
+                    <div style={{ fontWeight: 600 }}>{'—'}</div>
                 </div>
                 <div>
                     <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-tertiary)' }}>Trạng thái</div>
