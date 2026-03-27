@@ -66,10 +66,12 @@ export function useExport() {
 
             const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
-            // Add Vietnamese Font
-            doc.addFileToVFS('Roboto-Regular.ttf', ROBOTO_BASE64)
-            doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal')
-            doc.setFont('Roboto')
+            // Add Vietnamese Font (if available)
+            if (ROBOTO_BASE64) {
+                doc.addFileToVFS('Roboto-Regular.ttf', ROBOTO_BASE64)
+                doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal')
+                doc.setFont('Roboto')
+            }
 
             // Title
             doc.setFontSize(16)

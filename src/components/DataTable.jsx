@@ -241,7 +241,7 @@ export default function DataTable({
                                     {columns.map((col, j) => (
                                         <td key={j}>
                                             <div className="skeleton" style={{
-                                                height: 14, width: `${60 + Math.random() * 30}%`,
+                                                height: 14, width: `${60 + ((i * 7 + j * 13) % 30)}%`,
                                                 animationDelay: `${(i * columns.length + j) * 50}ms`,
                                             }} />
                                         </td>

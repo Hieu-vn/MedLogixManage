@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { CheckCircle, AlertTriangle, XCircle, Info } from 'lucide-react'
 
 /**
@@ -176,10 +176,10 @@ export default function CrossVerificationPanel({
                             <th></th>
                             <th></th>
                             {fieldsToCompare.filter(f => f !== 'code').map(f => (
-                                <>
-                                    <th key={f + '_s'} style={{ fontSize: 'var(--font-xs)', minWidth: 60 }}>{sourceLabel}</th>
-                                    <th key={f + '_t'} style={{ fontSize: 'var(--font-xs)', minWidth: 60 }}>{targetLabel}</th>
-                                </>
+                                <Fragment key={f + '_hdr'}>
+                                    <th style={{ fontSize: 'var(--font-xs)', minWidth: 60 }}>{sourceLabel}</th>
+                                    <th style={{ fontSize: 'var(--font-xs)', minWidth: 60 }}>{targetLabel}</th>
+                                </Fragment>
                             ))}
                             <th></th>
                         </tr>
@@ -194,17 +194,17 @@ export default function CrossVerificationPanel({
                                 {fieldsToCompare.filter(f => f !== 'code').map(f => {
                                     const mismatch = r.mismatches.find(m => m.field === f)
                                     return (
-                                        <>
-                                            <td key={f + '_s'} style={mismatch ? { fontWeight: 600 } : {}}>
+                                        <Fragment key={f + '_data'}>
+                                            <td style={mismatch ? { fontWeight: 600 } : {}}>
                                                 {r.source[f] ?? '—'}
                                             </td>
-                                            <td key={f + '_t'} style={mismatch ? {
+                                            <td style={mismatch ? {
                                                 fontWeight: 700, color: '#D63031', background: 'rgba(214,48,49,0.08)',
                                             } : { color: 'var(--text-tertiary)' }}>
                                                 {r.target ? (r.target[f] ?? '—') : '—'}
                                                 {mismatch && ' ❌'}
                                             </td>
-                                        </>
+                                        </Fragment>
                                     )
                                 })}
                                 <td>
@@ -227,10 +227,10 @@ export default function CrossVerificationPanel({
                                 <td>+</td>
                                 <td><span className="code-badge" style={{ opacity: 0.6 }}>{t.code}</span></td>
                                 {fieldsToCompare.filter(f => f !== 'code').map(f => (
-                                    <>
-                                        <td key={f + '_s'} style={{ color: 'var(--text-tertiary)' }}>—</td>
-                                        <td key={f + '_t'}>{t[f] ?? '—'}</td>
-                                    </>
+                                    <Fragment key={f + '_extra'}>
+                                        <td style={{ color: 'var(--text-tertiary)' }}>—</td>
+                                        <td>{t[f] ?? '—'}</td>
+                                    </Fragment>
                                 ))}
                                 <td><span style={{ color: '#FDCB6E' }}>➕ Thừa</span></td>
                             </tr>

@@ -58,7 +58,7 @@ export default function App() {
             <ErrorBoundary>
                 <ToastProvider>
                     <Suspense fallback={<PageLoader />}>
-                    <Routes>
+                        <Routes>
                         <Route path="/login" element={<LoginPage />} />
                         <Route
                             path="/*"
@@ -115,7 +115,7 @@ export default function App() {
                                 </ProtectedRoute>
                             }
                         />
-                    </Routes>
+                        </Routes>
                     </Suspense>
                 </ToastProvider>
             </ErrorBoundary>
